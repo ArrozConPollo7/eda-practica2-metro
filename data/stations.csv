@@ -1,0 +1,47 @@
+id,nombre,linea,lat,lon
+niquia,Niquía,A,6.33778,-75.54440
+bello,Bello,A,6.33028,-75.55360
+madera,Madera,A,6.31583,-75.55540
+acevedo,Acevedo,A|K,6.30028,-75.55833
+tricentenario,Tricentenario,A,6.29036,-75.56468
+caribe,Caribe,A,6.27833,-75.56940
+universidad,Universidad,A,6.26944,-75.56580
+hospital,Hospital,A,6.26389,-75.56330
+prado,Prado,A,6.25694,-75.56610
+parque_berrio,Parque Berrío,A,6.25028,-75.56833
+san_antonio,San Antonio,A|B|T-A,6.24722,-75.56970
+alpujarra,Alpujarra,A,6.24306,-75.57140
+exposiciones,Exposiciones,A,6.23861,-75.57310
+industriales,Industriales,A,6.23000,-75.57560
+poblado,Poblado,A,6.21222,-75.57810
+aguacatala,Aguacatala,A,6.19417,-75.58170
+ayura,Ayurá,A,6.18611,-75.58610
+envigado,Envigado,A,6.17472,-75.59690
+itagui,Itagüí,A,6.16294,-75.60671
+sabaneta,Sabaneta,A,6.15776,-75.61611
+la_estrella,La Estrella,A,6.15267,-75.62656
+cisneros,Cisneros,B,6.24917,-75.57530
+suramericana,Suramericana,B,6.25306,-75.58310
+estadio,Estadio,B,6.25333,-75.58830
+floresta,Floresta,B,6.25861,-75.59780
+santa_lucia,Santa Lucía,B,6.25806,-75.60380
+san_javier,San Javier,B|J,6.25694,-75.61390
+andalucia,Andalucía,K,6.29633,-75.55182
+popular,Popular,K,6.29515,-75.54810
+santo_domingo,Santo Domingo Savio,K|L,6.29319,-75.54174
+juan_xxiii,Juan XXIII,J,6.26569,-75.61370
+vallejuelos,Vallejuelos,J,6.27536,-75.61400
+la_aurora,La Aurora,J,6.28111,-75.61420
+arvi,Arví,L,6.28153,-75.50292
+oriente,Oriente,H|T-A,6.23323,-75.54014
+las_torres,Las Torres,H,6.23666,-75.53632
+villa_sierra,Villa Sierra,H,6.23490,-75.52876
+miraflores,Miraflores,M|T-A,6.24139,-75.54889
+el_pinal,El Pinal,M,6.24532,-75.54440
+trece_de_noviembre,Trece de Noviembre,M,6.24750,-75.54111
+san_jose,San José,T-A,6.24732,-75.56539
+pabellon_agua,Pabellón del Agua,T-A,6.24557,-75.56199
+bicentenario,Bicentenario,T-A,6.24395,-75.55878
+buenos_aires,Buenos Aires,T-A,6.24141,-75.55391
+loyola,Loyola,T-A,6.23903,-75.54518
+alejandro_echavarria,Alejandro Echavarría,T-A,6.23549,-75.54175
