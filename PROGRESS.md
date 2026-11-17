@@ -35,7 +35,8 @@ Entrega lista (17-nov-2026). Verificado en Linux y en Windows con MinGW-w64
   `Graph::indiceEstacion`/`Graph::nodo` eran O(n) por fila.
 - Autocompletado: las estaciones del Metro van primero (el Trie tiene 11 925
   entradas).
-- `practica2_eda.zip`: 35 archivos, sin `PROGRESS.md`, sin `.bat`, sin `build/`.
+- `entrega_practica2.zip`: 34 archivos, sin `PROGRESS.md`, sin `.bat`, sin `build/` y
+  sin `report/reporte.pdf` (el informe va aparte).
 
 ## Comandos
 
@@ -43,11 +44,12 @@ Entrega lista (17-nov-2026). Verificado en Linux y en Windows con MinGW-w64
 - Windows MinGW: `cmake -S . -B build -G "MinGW Makefiles" && cmake --build build`.
 - Datos: `python3 tools/construir_grafo_buses.py` y `..._urbanos.py`.
 - Reporte: `cd report && pdflatex reporte.tex` dos veces (27 páginas).
-- Entrega: `practica2_eda.zip` + `report/reporte.pdf`.
+- Entrega: `entrega_practica2.zip` + `practica2_informe.pdf` (el PDF fuera del zip).
 
 ## Verificación hecha
 
 Zip descomprimido en carpeta limpia: compila sin warnings, las 10 pruebas pasan,
 el servidor responde (`/api/ruta` con 3 alternativas, el desvío de Floresta y
-`/` con HTTP 200) y el PDF del zip es el de 27 páginas. En Windows (MinGW GCC
-16.2) se compiló y se comprobó el mismo desvío.
+`/` con HTTP 200) y el informe se regenera desde el zip con pdflatex (27 páginas,
+2 desbordes de 1 pt). En Windows (MinGW GCC 16.2) se compiló y se comprobó el
+mismo desvío.
