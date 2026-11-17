@@ -15,6 +15,11 @@ Windows con MinGW-w64 (cross-compilado, 0 warnings en ambos).
   en Windows `SOCKET` no tiene signo y la comparación siempre era falsa
   (warning `-Wtype-limits` que solo aparece al compilar con MinGW).
 - `.gitignore`: auxiliares de LaTeX.
+- `CMakeLists.txt`: con MinGW se enlaza `-static`; sin eso el `.exe` importa
+  `libstdc++-6.dll` y `libgcc_s_seh-1.dll` y muere al instante cuando el PATH del
+  proceso no incluye `mingw64\bin` (caso de doble clic). Verificado en Windows con
+  WinLibs GCC 16.2: el zip compila sin warnings, las 9 pruebas pasan y el `.exe`
+  estático sirve la interfaz sin el PATH de MinGW.
 - `practica2_eda.zip` regenerado: 27 archivos, sin `PROGRESS.md`, sin `.bat` ni
   `build/`.
 

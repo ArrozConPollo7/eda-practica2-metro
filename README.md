@@ -43,6 +43,11 @@ cmake --build build --config Release
 
 En ese caso el ejecutable queda en `build\Release\navegador.exe`.
 
+Con MinGW, el `CMakeLists.txt` enlaza el ejecutable de forma estática: no
+depende de `libstdc++-6.dll` ni de `libgcc_s_seh-1.dll`, así que corre desde
+cualquier consola o con doble clic. (Sin ese enlace, el `.exe` se cierra al
+instante si la carpeta `bin` de MinGW no está en el `PATH` del proceso.)
+
 **Opción A, interfaz web** (lanzar desde la carpeta del proyecto, porque el
 servidor busca `web\index.html` relativo a la carpeta actual):
 

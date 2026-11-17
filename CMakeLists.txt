@@ -15,6 +15,13 @@ else()
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+if(MINGW)
+  # MinGW enlaza la biblioteca estándar como DLL (libstdc++-6.dll,
+  # libgcc_s_seh-1.dll). Sin -static, navegador.exe solo arranca si el PATH del
+  # proceso incluye la carpeta bin de MinGW; con doble clic no la incluye.
+  add_link_options(-static)
+endif()
+
 # Núcleo compartido entre el programa y las pruebas.
 add_library(nucleo STATIC
   src/graph.cpp

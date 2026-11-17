@@ -194,7 +194,9 @@ cmake --build build
 Si \arch{cmake} avisa de que no encuentra el programa de compilación, MinGW no
 está en el \arch{PATH}: Windows no trae compilador de C++ por defecto, así que
 hay que instalarlo (winlibs o MSYS2) y añadir su carpeta \arch{bin} al
-\arch{PATH} antes de repetir los comandos.
+\arch{PATH} antes de repetir los comandos. El \arch{CMakeLists.txt} enlaza el
+ejecutable de MinGW de forma estática, así que después no depende de las DLL de
+la biblioteca estándar y se puede abrir desde cualquier carpeta.
 
 El ejecutable queda en \arch{build\textbackslash{}navegador.exe}. Con Visual
 Studio (carga de trabajo \emph{Desarrollo para el escritorio con C++}) se omite
