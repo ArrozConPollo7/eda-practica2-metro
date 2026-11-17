@@ -348,7 +348,11 @@ std::vector<int> puntosDeArticulacion(const Graph& g) {
 
     std::vector<int> salida;
     for (int v = 0; v < n; ++v) {
-        if (articulacion[v] != 0) salida.push_back(v);
+        if (articulacion[v] == 0) continue;
+        // Las paradas de una ruta alimentadora son casi todas hojas: como punto
+        // crítico del sistema no aportan y llenarían el mapa de ruido.
+        if (g.estaciones[static_cast<std::size_t>(v)].bus) continue;
+        salida.push_back(v);
     }
     return salida;
 }

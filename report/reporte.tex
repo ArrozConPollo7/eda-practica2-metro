@@ -146,7 +146,10 @@ las cuatro funcionalidades mínimas y cinco adicionales:
   \item autocompletado de estaciones con un Trie, sin distinguir tildes ni
         mayúsculas;
   \item una interfaz web (servidor HTTP con sockets y una página con el mapa
-        interactivo) sobre el mismo motor.
+        interactivo) sobre el mismo motor;
+  \item las 47 rutas alimentadoras del sistema con sus 1836 paradas, cargadas
+        desde el portal del Metro y metidas en el mismo grafo, para que las rutas
+        puedan combinar metro y bus.
 \end{itemize}
 
 \textbf{No se usó ninguna librería externa.} Todo el programa es C++17 con la
@@ -158,13 +161,17 @@ desde el programa; no hay dependencias de graficación.
 \begin{center}
 \arch{src/graph.hpp} · \arch{src/graph.cpp} · \arch{src/algorithms.hpp} ·
 \arch{src/algorithms.cpp} · \arch{src/trie.hpp} · \arch{src/io.hpp} ·
-\arch{src/io.cpp} · \arch{src/main.cpp} · \arch{tests/test\_main.cpp}
+\arch{src/io.cpp} · \arch{src/servidor.hpp} · \arch{src/servidor.cpp} ·
+\arch{src/main.cpp} · \arch{tests/test\_main.cpp} ·
+\arch{tools/construir\_grafo\_buses.py}
 \end{center}
 
-La red que modelamos es un árbol: 46 estaciones conectadas con 45 tramos, sin
+La red del Metro es un árbol: 46 estaciones conectadas con 45 tramos, sin
 ciclos. Eso tiene consecuencias que aparecen varias veces en el informe (entre
 dos estaciones existe un único camino simple) y las discutimos en la
-sección~\ref{sec:limitaciones}.
+sección~\ref{sec:limitaciones}. Para salir de ese árbol cargamos además las
+rutas alimentadoras de bus, que agregan 1836 paradas y crean los ciclos que
+faltaban; el modelo completo queda en la sección~\ref{sec:buses}.
 
 % ===========================================================================
 \section{Instalación y ejecución}
@@ -773,7 +780,7 @@ crece hacia abajo.
 Primero los tramos de cada línea con su color y opacidad 0,55; después los puntos
 de estación (círculo blanco con borde del color de la línea, más grande en los
 intercambiadores); después la ruta, con una polilínea blanca gruesa debajo de una
-azul oscura para que se lea sobre cualquier color; y al final los nombres.
+verde oscura para que se lea sobre cualquier color; y al final los nombres.
 
 \paragraph{Las etiquetas.}
 Se rotulan todas las estaciones de la ruta y los intercambiadores. Cada etiqueta
@@ -814,7 +821,7 @@ El menú de consola sirve para probar cada función, pero para mirar la red y
 comparar rutas un mapa es mejor. La interfaz web es una capa sobre el mismo
 motor: no reimplementa ningún algoritmo, solo dibuja lo que el C++ calcula.
 
-\paragraph{El servidor (405 líneas).}
+\paragraph{El servidor (467 líneas).}
 \arch{src/servidor.cpp} levanta un servidor HTTP con sockets POSIX
 (\arch{socket}, \arch{bind}, \arch{listen}, \arch{accept}) en un solo hilo, que
 atiende una petición a la vez. Solo acepta \arch{GET} y responde con
@@ -827,7 +834,7 @@ La API devuelve JSON armado con \arch{ostringstream}, igual que la exportación:
 \toprule
 Ruta & Qué devuelve \\
 \midrule
-\arch{/api/grafo} & líneas con su color, las 46 estaciones y los 45 tramos \\
+\arch{/api/grafo} & líneas con su color, las 46 estaciones, los 45 tramos del Metro y las 1836 paradas de bus en una lista aparte \\
 \arch{/api/estaciones?q=san} & coincidencias del Trie para el autocompletado \\
 \arch{/api/ruta} & hasta $k$ rutas con sus paradas y tiempos acumulados, más la comparación A*/Dijkstra; recibe origen, destino, $k$, transbordo y estación cerrada como parámetros \\
 \arch{/api/articulacion} & los puntos de articulación de la red \\
@@ -836,7 +843,7 @@ Ruta & Qué devuelve \\
 \captionof{table}{Los cuatro puntos de la API. El grafo se serializa una sola vez al arrancar; solo se reconstruye si el usuario cambia la penalización de transbordo.}
 \end{center}
 
-\paragraph{El mapa (715 líneas).}
+\paragraph{El mapa (795 líneas).}
 \arch{web/index.html} es un solo archivo con todo el CSS y el JavaScript en
 línea: no hay CDN ni tipografías externas, así que la interfaz funciona sin
 internet. El dibujo se construye en el navegador con la misma proyección del
@@ -864,9 +871,151 @@ El servidor resuelve eso con unas pocas líneas de sockets.
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{fig_web.png}
-\caption{La interfaz web con la ruta Niquía → Arví (37,3 minutos, dos transbordos). A la izquierda el panel con el origen, el destino, el deslizador de transbordo, las rutas alternativas y la lista de paradas con su tiempo acumulado; a la derecha el mapa con la ruta en oscuro y los nombres de las estaciones de la ruta.}
+\caption{La interfaz web con tres rutas de San Antonio a Arví. La activa es la tercera (49,1 minutos) porque usa el bus C6-021 entre Popular y Santo Domingo Savio: se ve en el chip del panel y en la lista de paradas. A la izquierda están el origen, el destino, el deslizador de transbordo, el selector de Yen, la casilla de paradas de bus y la comparación A*/Dijkstra; a la derecha el mapa con la ruta en oscuro.}
 \label{fig:web}
 \end{figure}
+
+% ===========================================================================
+\section{Las rutas alimentadoras}
+\label{sec:buses}
+
+El Metro solo tiene un problema de fondo: es un árbol. Entre dos estaciones hay
+un único camino, así que Yen no tiene alternativas que ofrecer y cerrar una
+estación de paso deja el viaje sin solución. La forma de romper eso no era
+inventar datos: era meter al grafo los buses que ya existen. Las rutas
+alimentadoras son los buses que llevan pasajeros de los barrios a las
+estaciones, y sus datos son públicos.
+
+\subsection{De dónde salen los datos}
+
+El portal geográfico del Metro (\arch{metrogis.metrodemedellin.gov.co}) publica
+dos capas abiertas que se consultan por REST sin token:
+\arch{Hosted/ruta\_alimentadora}, con 103 polilíneas, y
+\arch{Hosted/Alimentadora\_Parada}, con 1836 paradas georreferenciadas. Las 103
+polilíneas corresponden a 47 códigos de ruta: cada ruta tiene ida, vuelta y
+algunas variantes por horario, y cada variante es una línea distinta en la capa.
+
+La capa de paradas no trae la secuencia del recorrido, solo el nombre y la
+posición. Para ordenarlas se proyecta cada parada sobre la polilínea de su ruta:
+se busca el vértice más cercano, se toma su distancia acumulada a lo largo de la
+línea y se ordena por ella. Los vértices están a unos 9 metros, mucho menos que
+la separación entre paradas, así que el orden sale correcto sin geometría exacta.
+Con una tolerancia de 90 metros las 1836 paradas quedan asignadas a una
+polilínea. Hay 354 paradas sin nombre en la fuente; se renombran como
+\emph{Parada <ruta> <id>} para que se puedan buscar.
+
+Todo el proceso está en \arch{tools/construir\_grafo\_buses.py}, que descarga las
+capas y escribe los tres CSV del proyecto, de modo que los datos se pueden
+regenerar.
+
+\subsection{Cómo entran al grafo}
+
+No tocamos los algoritmos. El grafo ya estaba expandido por línea, con nodos
+(estación, línea); una parada de bus entra como un nodo (parada, ruta). La
+ruta de bus ocupa el lugar de la línea y el acceso a pie ocupa el lugar del
+transbordo, así que Dijkstra, A*, Yen y los puntos de articulación funcionan sin
+cambios.
+
+Las aristas nuevas son de dos tipos. Entre paradas consecutivas de una misma
+ruta, el tiempo sale de la misma ecuación~\eqref{eq:tiempo} con 18 km/h
+comerciales más 0,4 minutos por parada. Entre una parada y una estación a menos
+de 400 metros, el tiempo es la caminata a 4,8 km/h; subirse al bus suma además 5
+minutos de espera media y bajarse no cuesta nada. Esa asimetría es la que evita
+que el algoritmo use un bus para saltarse una sola parada.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+ & Metro & Con buses \\
+\midrule
+Estaciones y paradas        & 46    & 1882 \\
+Nodos (estación, línea)     & 53    & 1889 \\
+Aristas dirigidas           & 106   & 3794 \\
+Carga desde los CSV         & 2 ms  & 19 ms \\
+\bottomrule
+\end{tabular}
+\caption{Tamaño del grafo antes y después de cargar las alimentadoras. Las paradas son 1836 y 47 las rutas de bus; el resto de estaciones son las del Metro.}
+\label{tab:tamano}
+\end{table}
+
+Veinte de las 46 estaciones tienen al menos una parada a menos de 400 metros. Las
+otras 26 no ganan nada con este modelo, y eso se nota en los resultados.
+
+\subsection{Qué cambia}
+
+El primer efecto es el que buscábamos: aparecen caminos alternativos. La
+tabla~\ref{tab:alternativas} muestra los mismos pares que antes devolvían una
+sola ruta.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lrrr}
+\toprule
+Tramo & Ruta 1 & Ruta 2 & Ruta 3 \\
+\midrule
+San Antonio $\to$ Arví   & 40,3 & 46,6 & 49,1 \\
+Poblado $\to$ Arví       & 47,0 & 53,3 & 55,8 \\
+Niquía $\to$ Arví        & 37,3 & 43,6 & 46,1 \\
+San Antonio $\to$ Acevedo & 10,8 & 20,3 & 20,3 \\
+\bottomrule
+\end{tabular}
+\caption{Tres rutas con el grafo completo, en minutos. Antes de cargar los buses todos estos pares devolvían una sola ruta. La tercera de San Antonio a Arví usa el bus C6-021 entre Popular y Santo Domingo Savio.}
+\label{tab:alternativas}
+\end{table}
+
+El segundo efecto es sobre la estación cerrada, que era el caso más frustrante.
+Cerrando Universidad, el viaje San Antonio $\to$ Acevedo ya no se queda sin
+solución: encuentra 42,5 minutos bajando en Hospital, tomando el bus C6-016 y
+volviendo a la línea K, con 23 paradas de las cuales 17 son de bus. Sin buses ese
+mismo cierre partía la red en dos.
+
+El tercer efecto es sobre A*, y no es bueno. La heurística divide la distancia por
+la velocidad máxima del grafo; con buses, esa velocidad la fija un bus (18 km/h)
+en lugar del tren, así que la estimación se vuelve mucho más floja y A* explora
+casi los mismos nodos que Dijkstra. La tabla~\ref{tab:astar-bus} lo muestra.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Tramo & Costo & Nodos Dijkstra & Nodos A* & Ahorro \\
+\midrule
+Poblado $\to$ Arví        & 47,0 & 961 & 881 & 8,3\,\% \\
+Niquía $\to$ Arví         & 37,3 & 552 & 293 & 46,9\,\% \\
+San Antonio $\to$ Acevedo & 10,8 &  97 &  13 & 86,6\,\% \\
+Envigado $\to$ Niquía     & 33,3 & 377 &  18 & 95,2\,\% \\
+\bottomrule
+\end{tabular}
+\caption{Nodos explorados con el grafo completo. En los trayectos cortos la heurística sigue ahorrando casi todo; en el trayecto largo a Arví el ahorro se cae, porque el bus baja la velocidad máxima y con ella la cota de la heurística.}
+\label{tab:astar-bus}
+\end{table}
+
+\subsection{Lo que no cambia}
+
+Los puntos de articulación siguen siendo 40. Tiene sentido: las alimentadoras son
+radiales, salen de una estación hacia un barrio y no conectan dos estaciones entre
+sí, así que no ofrecen un camino alterno dentro de la red del Metro. Eso sí, en el
+grafo completo el DFS marca 1131 paradas como puntos de articulación, porque casi
+todas son hojas; se filtran de la salida para no llenar el mapa de ruido.
+
+\subsection{Límites de este modelo}
+
+\begin{itemize}
+  \item La espera del bus es un número fijo de 5 minutos: no hay frecuencias ni
+        hora pico. En un corredor con buses cada 3 minutos el modelo lo castiga,
+        y en una ruta de uno cada 20 lo premia.
+  \item Solo 20 de las 46 estaciones tienen una parada cerca, así que en la mitad
+        del sistema el modelo con buses es igual al del Metro.
+  \item 354 paradas no tienen nombre en la fuente; se les puso un identificador,
+        pero no se puede decir al usuario en qué esquina está.
+  \item Los tiempos del bus son estimados con la misma ecuación que los del tren,
+        con una velocidad comercial típica. No salen de un GPS ni de frecuencias
+        publicadas.
+\end{itemize}
 
 % ===========================================================================
 \section{Resultados}
@@ -916,7 +1065,9 @@ mano, la simetría de los tiempos (La Estrella → Niquía cuesta lo mismo que a
 revés), que A* y Dijkstra den el mismo costo en 20 pares, que Yen devuelva tres
 rutas en un grafo con ciclo, que Acevedo y Santo Domingo Savio sean de articulación
 y La Estrella no, que sin Santo Domingo no se llegue a Arví, que la penalización
-de transbordo se aplique exacta y que el Trie ignore tildes y mayúsculas. Las
+de transbordo se aplique exacta y que el Trie ignore tildes y mayúsculas. Un
+décimo bloque carga el grafo con buses y comprueba los 1889 nodos, que Yen
+devuelva tres alternativas y que cerrar Universidad deje un desvío viable. Las
 pruebas compilan con \arch{-UNDEBUG} para que \arch{NDEBUG} de \arch{Release} no
 las desactive en silencio.
 
@@ -930,10 +1081,12 @@ las desactive en silencio.
         las frecuencias (2:50 min en hora pico en la A, más en hora valle), que en
         un viaje con transbordos puede pesar más que los minutos de viaje. Tampoco
         distinguen hora pico de hora valle.
-  \item \textbf{La red es un árbol.} 46 estaciones y 45 tramos, sin ciclos. Por eso
-        Yen devuelve una sola ruta entre cualquier par y 40 de las 46 estaciones
-        son puntos de articulación. Las alternativas reales en Medellín vienen de
-        los buses del SIT y de Metroplús, que no modelamos.
+  \item \textbf{La red del Metro es un árbol.} 46 estaciones y 45 tramos, sin
+        ciclos. Por eso, con solo el Metro, Yen devuelve una sola ruta entre
+        cualquier par y 40 de las 46 estaciones son puntos de articulación. Las
+        alimentadoras agregan ciclos y arreglan las alternativas, pero solo donde
+        hay una parada cerca: en 26 de las 46 estaciones el modelo con buses es
+        idéntico al del Metro.
   \item \textbf{Las coordenadas son las publicadas, no medidas.} Cinco cifras
         decimales dan precisión de metros, suficiente para dibujar y para estimar
         distancias, pero un tramo real no es una recta entre dos estaciones: el
@@ -941,12 +1094,14 @@ las desactive en silencio.
   \item \textbf{El transbordo es un número.} Los 3 minutos no distinguen entre
         cambiar de andén en San Antonio y caminar hasta el tranvía, ni dependen de
         la estación. El modelo es el mismo para todos los intercambiadores.
-  \item \textbf{A* no gana en tiempo a esta escala.} Explora menos nodos, pero el
-        cálculo de la heurística cuesta más que lo que ahorra en un grafo de 53
-        nodos. La comparación honesta es la de nodos explorados.
-  \item \textbf{Yen no está validado sobre datos reales con ciclos}, porque no los
-        hay. Queda validado sobre un grafo sintético en las pruebas; si se
-        agregaran líneas que cerraran un ciclo, el algoritmo ya está listo.
+  \item \textbf{A* gana en nodos, no en reloj.} Explora menos nodos, pero el
+        cálculo de la heurística cuesta más que lo que ahorra; con buses el
+        ahorro baja al 8\,\% en el trayecto más largo, porque la velocidad máxima
+        del grafo la termina fijando un bus y la cota se debilita. La comparación
+        honesta sigue siendo la de nodos explorados.
+  \item \textbf{Yen ya corre sobre datos reales con ciclos}, pero la calidad de
+        las alternativas depende de los datos: donde no hay alimentadora cerca,
+        sigue devolviendo una sola ruta porque el camino es único de verdad.
   \item \textbf{El grafo es estático.} No hay horarios, ni cierres temporales por
         hora, ni estaciones con acceso restringido, ni costos por tipo de usuario.
 \end{enumerate}
@@ -961,7 +1116,9 @@ las desactive en silencio.
   \item Modelar los nodos como pares (estación, línea) es lo que permite que el
         transbordo sea una decisión del algoritmo y no una suma posterior. Cuesta
         53 nodos en vez de 46 y 16 aristas más, y a cambio el camino óptimo ya
-        tiene en cuenta el cambio de línea.
+        tiene en cuenta el cambio de línea. La misma idea sirvió después para los
+        buses: una parada es un nodo (parada, ruta) y el grafo creció a 1889
+        nodos sin tocar una línea de los algoritmos.
   \item La heurística haversine dividida por la velocidad máxima es admisible por
         la desigualdad triangular, y se ve en los datos: A* y Dijkstra dan el mismo
         costo en los 20 pares y A* explora el 64,3\,\% de los nodos. En un grafo
@@ -969,7 +1126,10 @@ las desactive en silencio.
   \item La forma de la red manda. Que sea un árbol explica a la vez el resultado de
         Yen (una sola ruta), el de los puntos de articulación (40 de 46) y el de la
         estación cerrada (Arví queda aislado si se cierra Santo Domingo Savio). Tres
-        funcionalidades distintas dicen lo mismo sobre la topología.
+        funcionalidades distintas dicen lo mismo sobre la topología. Al agregar las
+        alimentadoras, dos de las tres cambian (Yen encuentra alternativas y el
+        cierre tiene desvío) y la tercera no, porque los buses son radiales y no
+        conectan estaciones entre sí.
   \item La interfaz web confirma que la separación sirve: el servidor expone el
         motor por HTTP y la página solo dibuja. Agregar el mapa interactivo no
         obligó a tocar Dijkstra, A*, Yen ni el Trie.
@@ -1019,14 +1179,18 @@ OK puntos de articulación (40)
 OK estación cerrada
 OK penalización de transbordo
 OK autocompletado con Trie
+OK rutas de bus (1836 paradas, 3 alternativas, desvio por 42.53 min)
 Todas las pruebas pasaron
 \end{lstlisting}
 
-Una consulta completa, con la salida tal como la imprime el programa:
+Una consulta completa, con la salida tal como la imprime el programa. El costo no
+cambia respecto al modelo del Metro (esa ruta no usa bus), pero el grafo es cuatro
+veces más grande y eso se ve en los nodos explorados:
 
 \begin{lstlisting}[style=term]
 $ ./build/navegador
-Metro de Medellín: 46 estaciones, 8 líneas, 53 nodos (estación, línea), 106 aristas dirigidas
+Metro de Medellín: 46 estaciones, 8 líneas del Metro, 1836 paradas de bus en 47
+rutas, 1889 nodos (estación, línea), 3794 aristas dirigidas
 
 Ruta Niquía -> Arví
   Niquía
@@ -1040,7 +1204,7 @@ Ruta Niquía -> Arví
   -- transbordo a Línea L (+3.0 min) en Santo Domingo Savio
   Arví  [Línea L]  37.3 min
 Total: 37.3 min | 7 tramos | 2 transbordos | 8 estaciones
-Nodos explorados: 44 | tiempo de búsqueda: 0.003 ms
+Nodos explorados: 552 | tiempo de búsqueda: 0.047 ms
 \end{lstlisting}
 
 \section{Mapa de archivos}
@@ -1052,21 +1216,25 @@ Nodos explorados: 44 | tiempo de búsqueda: 0.003 ms
 \toprule
 Archivo & Líneas & Contenido \\
 \midrule
-\arch{graph.hpp}      &  80 & estructuras (Estacion, Linea, Nodo, Arista, Tramo) y la clase Graph \\
-\arch{graph.cpp}      & 151 & normalización de texto, haversine, consultas del grafo, tramos de una ruta \\
+\arch{graph.hpp}      &  82 & estructuras (Estacion, Linea, Nodo, Arista, Tramo) y la clase Graph \\
+\arch{graph.cpp}      & 155 & normalización de texto, haversine, consultas del grafo, tramos de una ruta \\
 \arch{algorithms.hpp} &  43 & Resultado, Bloqueo y las firmas de los algoritmos \\
-\arch{algorithms.cpp} & 330 & Dijkstra (53), A* (115), Yen (197), puntos de articulación (276) \\
+\arch{algorithms.cpp} & 358 & Dijkstra (53), A* (115), Yen (221), puntos de articulación (300) \\
 \arch{trie.hpp}       &  79 & Trie con los métodos en línea \\
-\arch{io.hpp}         &  16 & carga y exportación \\
-\arch{io.cpp}         & 485 & CSV (87), DOT (177), JSON (232), SVG (317) \\
-\arch{servidor.hpp}   &   8 & firma de \arch{iniciarServidor} \\
-\arch{servidor.cpp}   & 405 & servidor HTTP con sockets y API JSON \\
-\arch{web/index.html} & 715 & interfaz web: mapa interactivo, panel de controles y comparación \\
-\arch{main.cpp}       & 447 & menú de consola y modo \arch{--web} \\
-\arch{tests/test\_main.cpp} & 153 & nueve bloques de \arch{assert} \\
-\arch{CMakeLists.txt} &  37 & biblioteca \arch{nucleo}, \arch{navegador}, \arch{pruebas} y los flags \\
+\arch{io.hpp}         &  19 & carga y exportación \\
+\arch{io.cpp}         & 567 & CSV del Metro y de buses (89), DOT (259), JSON (314), SVG (399) \\
+\arch{servidor.hpp}   &   9 & firma de \arch{iniciarServidor} \\
+\arch{servidor.cpp}   & 467 & servidor HTTP con sockets y API JSON \\
+\arch{web/index.html} & 795 & interfaz web: mapa interactivo, capa de paradas y comparación \\
+\arch{main.cpp}       & 470 & menú de consola, modo \arch{--web} y \arch{--metro} \\
+\arch{tests/test\_main.cpp} & 184 & diez bloques de \arch{assert} \\
+\arch{CMakeLists.txt} &  44 & biblioteca \arch{nucleo}, \arch{navegador}, \arch{pruebas} y los flags \\
 \arch{data/stations.csv} & 47 & 46 estaciones con id, nombre, líneas, lat y lon \\
 \arch{data/edges.csv}    & 46 & 45 tramos con origen, destino y minutos \\
+\arch{data/bus\_paradas.csv} & 1837 & 1836 paradas de bus con su ruta \\
+\arch{data/bus\_tramos.csv}  & 2833 & tramos entre paradas consecutivas \\
+\arch{data/bus\_acceso.csv}  & 721 & accesos a pie parada--estación \\
+\arch{tools/construir\_grafo\_buses.py} & 183 & descarga las capas del Metro y escribe los tres CSV de bus \\
 \bottomrule
 \end{tabular}
 \captionof{table}{Archivos del proyecto. Los números de línea de la tercera columna son los que usan los listados de este informe.}

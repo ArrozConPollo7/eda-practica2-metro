@@ -100,7 +100,34 @@ dependencias) que sirve `web/index.html` y una API JSON: `/api/grafo`,
 arrastrar, fija origen y destino con dos clics y tiene el deslizador de
 transbordo, el selector de rutas de Yen, el simulado de estación cerrada y la
 comparación A* contra Dijkstra. El cálculo siempre queda en C++: el navegador
-solo pide JSON y dibuja.
+solo pide JSON y dibuja. La casilla **Mostrar paradas de bus** dibuja las 1836
+paradas como puntos grises.
+
+## Buses alimentadores
+
+Además del Metro, el grafo incluye las **47 rutas alimentadoras** del sistema
+con sus **1836 paradas**, tomadas del portal geográfico del Metro
+(`metrogis.metrodemedellin.gov.co`, capas `ruta_alimentadora` y
+`Alimentadora_Parada`, consulta REST sin token). Con ellas el grafo pasa de 53 a
+**1889 nodos** y de 106 a **3794 aristas**, y las rutas pueden combinar metro y
+bus.
+
+Cada parada entra como un nodo (parada, ruta), igual que las estaciones se
+modelan como (estación, línea); el acceso a pie de una parada a una estación a
+menos de 400 m se cobra como un transbordo, y subirse al bus suma 5 minutos de
+espera. Los algoritmos no cambiaron.
+
+Los CSV se regeneran con `python3 tools/construir_grafo_buses.py`, que descarga
+las capas y reescribe `data/bus_paradas.csv`, `data/bus_tramos.csv` y
+`data/bus_acceso.csv`. El script ordena las paradas de cada ruta
+proyectándolas sobre su polilínea, porque la capa de origen no trae la
+secuencia del recorrido.
+
+Para volver al modelo original, sin buses:
+
+```
+./build/navegador --metro        # 53 nodos, 106 aristas
+```
 
 ## Datos
 
@@ -126,12 +153,14 @@ src/trie.hpp              autocompletado por prefijo
 src/io.hpp/.cpp           CSV, DOT, JSON y SVG escritos a mano
 src/servidor.hpp/.cpp     servidor HTTP y API JSON para la interfaz web
 web/index.html            interfaz web (mapa interactivo, panel y comparación)
-src/main.cpp              menú de consola y modo --web
+src/main.cpp              menú de consola, modo --web y --metro
 tests/test_main.cpp       pruebas con assert
+tools/construir_grafo_buses.py  descarga las capas del Metro y genera los CSV de bus
 report/reporte.tex        reporte de la práctica
 ```
 
-La red de las ocho líneas es un árbol (46 estaciones y 45 tramos), así que entre
-dos estaciones existe un único camino simple: por eso Yen devuelve una sola ruta
-en los datos reales. El algoritmo se valida en las pruebas con un grafo de
-prueba que sí tiene un ciclo.
+La red de las ocho líneas del Metro es un árbol (46 estaciones y 45 tramos), así
+que entre dos estaciones existe un único camino simple: con `--metro`, Yen
+devuelve una sola ruta en los datos reales. Con las alimentadoras cargadas hay
+ciclos y Yen encuentra alternativas donde hay un bus cerca; en las estaciones sin
+alimentadora sigue devolviendo una sola, porque el camino es único de verdad.
