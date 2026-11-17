@@ -10,6 +10,7 @@
 #include <set>
 #include <sstream>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
 
 namespace {
@@ -86,6 +87,100 @@ bool estaEnCamino(const std::vector<int>& camino, int nodo) {
 
 }  // namespace
 
+namespace {
+
+// Índices para no recorrer todo el grafo por cada fila de los CSV: con los
+// buses urbanos hay ~12.000 estaciones y ~22.000 aristas, y las búsquedas
+// lineales de Graph::indiceEstacion/Graph::nodo se vuelven el cuello de botella.
+struct Indices {
+    std::unordered_map<std::string, int> estacionPorId;
+    std::unordered_map<std::string, int> lineaPorCodigo;
+    std::unordered_map<long long, int> nodoPorPar;
+    std::vector<std::vector<int>> nodosPorEstacion;
+};
+
+// Carga data/<prefijo>_paradas.csv como estaciones de la línea de su ruta.
+void cargarParadas(const std::string& dirDatos, const std::string& prefijo, Graph& g) {
+    std::ifstream paradas(dirDatos + "/" + prefijo + "_paradas.csv");
+    if (!paradas) return;
+    std::string fila;
+    std::getline(paradas, fila);  // encabezado
+    while (std::getline(paradas, fila)) {
+        if (recortar(fila).empty()) continue;
+        const std::vector<std::string> c = dividir(fila, ',');
+        if (c.size() < 5) continue;
+        int indice = g.indiceLinea(c[4]);
+        if (indice < 0) {
+            g.lineas.push_back({c[4], colorDeLinea(c[4])});
+            indice = static_cast<int>(g.lineas.size()) - 1;
+        }
+        Estacion p;
+        p.id = c[0];
+        p.nombre = c[1];
+        p.lat = std::stod(c[2]);
+        p.lon = std::stod(c[3]);
+        p.lineas.push_back(indice);
+        p.bus = true;
+        g.estaciones.push_back(p);
+    }
+}
+
+// Carga los tramos entre paradas y los accesos a pie de un conjunto de rutas.
+// El acceso se marca como transbordo porque cambia de línea.
+void cargarAristasDeBus(const std::string& dirDatos, const std::string& prefijo, Graph& g,
+                        const Indices& ix) {
+    auto estacion = [&ix](const std::string& id) {
+        const auto it = ix.estacionPorId.find(id);
+        return it == ix.estacionPorId.end() ? -1 : it->second;
+    };
+    auto nodo = [&ix](int est, int lin) {
+        const auto it = ix.nodoPorPar.find(static_cast<long long>(est) * 1000 + lin);
+        return it == ix.nodoPorPar.end() ? -1 : it->second;
+    };
+
+    std::ifstream tramos(dirDatos + "/" + prefijo + "_tramos.csv");
+    if (tramos) {
+        std::string fila;
+        std::getline(tramos, fila);  // encabezado
+        while (std::getline(tramos, fila)) {
+            if (recortar(fila).empty()) continue;
+            const std::vector<std::string> c = dividir(fila, ',');
+            if (c.size() < 4) continue;
+            const int a = estacion(c[0]);
+            const int b = estacion(c[1]);
+            const auto lin = ix.lineaPorCodigo.find(c[3]);
+            if (a < 0 || b < 0 || lin == ix.lineaPorCodigo.end()) continue;
+            const int u = nodo(a, lin->second);
+            const int v = nodo(b, lin->second);
+            if (u < 0 || v < 0) continue;
+            g.adj[static_cast<std::size_t>(u)].push_back({v, std::stod(c[2]), false});
+        }
+    }
+
+    // El CSV ya trae los dos sentidos; el de subida al bus incluye la espera.
+    std::ifstream accesos(dirDatos + "/" + prefijo + "_acceso.csv");
+    if (accesos) {
+        std::string fila;
+        std::getline(accesos, fila);  // encabezado
+        while (std::getline(accesos, fila)) {
+            if (recortar(fila).empty()) continue;
+            const std::vector<std::string> c = dividir(fila, ',');
+            if (c.size() < 3) continue;
+            const int a = estacion(c[0]);
+            const int b = estacion(c[1]);
+            if (a < 0 || b < 0) continue;
+            const double minutos = std::stod(c[2]);
+            for (int desde : ix.nodosPorEstacion[static_cast<std::size_t>(a)]) {
+                for (int hasta : ix.nodosPorEstacion[static_cast<std::size_t>(b)]) {
+                    g.adj[static_cast<std::size_t>(desde)].push_back({hasta, minutos, true});
+                }
+            }
+        }
+    }
+}
+
+}  // namespace
+
 bool cargarGrafo(const std::string& dirDatos, double transbordo, Graph& g, bool conBuses) {
     g = Graph{};
 
@@ -116,33 +211,11 @@ bool cargarGrafo(const std::string& dirDatos, double transbordo, Graph& g, bool 
     }
     estaciones.close();
 
-    // Rutas alimentadoras: cada parada se suma como una estación más, con la
-    // ruta de bus como si fuera una línea. Así el grafo expandido no cambia y
-    // el acceso a pie funciona como un transbordo.
+    // Rutas de bus: alimentadoras del Metro y urbanas de la Alcaldía. Cada
+    // parada entra como una estación de la línea de su ruta.
     if (conBuses) {
-        std::ifstream paradas(dirDatos + "/bus_paradas.csv");
-        if (paradas) {
-            std::string filaParada;
-            std::getline(paradas, filaParada);  // encabezado
-            while (std::getline(paradas, filaParada)) {
-                if (recortar(filaParada).empty()) continue;
-                const std::vector<std::string> c = dividir(filaParada, ',');
-                if (c.size() < 5) continue;
-                int indice = g.indiceLinea(c[4]);
-                if (indice < 0) {
-                    g.lineas.push_back({c[4], colorDeLinea(c[4])});
-                    indice = static_cast<int>(g.lineas.size()) - 1;
-                }
-                Estacion p;
-                p.id = c[0];
-                p.nombre = c[1];
-                p.lat = std::stod(c[2]);
-                p.lon = std::stod(c[3]);
-                p.lineas.push_back(indice);
-                p.bus = true;
-                g.estaciones.push_back(p);
-            }
-        }
+        cargarParadas(dirDatos, "bus", g);
+        cargarParadas(dirDatos, "urb", g);
     }
 
     if (g.estaciones.empty()) return false;
@@ -155,6 +228,26 @@ bool cargarGrafo(const std::string& dirDatos, double transbordo, Graph& g, bool 
     }
     g.adj.assign(g.nodos.size(), {});
 
+    // Índices una sola vez: las búsquedas lineales de Graph no aguantan 12.000
+    // estaciones con 22.000 aristas.
+    Indices ix;
+    ix.estacionPorId.reserve(g.estaciones.size() * 2);
+    ix.lineaPorCodigo.reserve(g.lineas.size() * 2);
+    ix.nodoPorPar.reserve(g.nodos.size() * 2);
+    ix.nodosPorEstacion.assign(g.estaciones.size(), {});
+    for (std::size_t i = 0; i < g.estaciones.size(); ++i) {
+        ix.estacionPorId[g.estaciones[i].id] = static_cast<int>(i);
+    }
+    for (std::size_t i = 0; i < g.lineas.size(); ++i) {
+        ix.lineaPorCodigo[g.lineas[i].codigo] = static_cast<int>(i);
+    }
+    for (std::size_t n = 0; n < g.nodos.size(); ++n) {
+        const int est = g.nodos[n].estacion;
+        const int lin = g.nodos[n].linea;
+        ix.nodoPorPar[static_cast<long long>(est) * 1000 + lin] = static_cast<int>(n);
+        ix.nodosPorEstacion[static_cast<std::size_t>(est)].push_back(static_cast<int>(n));
+    }
+
     std::ifstream aristas(dirDatos + "/edges.csv");
     if (!aristas) return false;
     std::getline(aristas, linea);  // encabezado
@@ -163,8 +256,10 @@ bool cargarGrafo(const std::string& dirDatos, double transbordo, Graph& g, bool 
         if (recortar(linea).empty()) continue;
         const std::vector<std::string> campos = dividir(linea, ',');
         if (campos.size() < 3) continue;
-        const int a = g.indiceEstacion(campos[0]);
-        const int b = g.indiceEstacion(campos[1]);
+        const auto itA = ix.estacionPorId.find(campos[0]);
+        const auto itB = ix.estacionPorId.find(campos[1]);
+        const int a = itA == ix.estacionPorId.end() ? -1 : itA->second;
+        const int b = itB == ix.estacionPorId.end() ? -1 : itB->second;
         if (a < 0 || b < 0) {
             ++saltadas;
             continue;
@@ -177,9 +272,11 @@ bool cargarGrafo(const std::string& dirDatos, double transbordo, Graph& g, bool 
                 std::find(g.estaciones[b].lineas.begin(), g.estaciones[b].lineas.end(), lin)) {
                 continue;
             }
-            const int u = g.nodo(a, lin);
-            const int v = g.nodo(b, lin);
-            if (u < 0 || v < 0) continue;
+            const auto itU = ix.nodoPorPar.find(static_cast<long long>(a) * 1000 + lin);
+            const auto itV = ix.nodoPorPar.find(static_cast<long long>(b) * 1000 + lin);
+            if (itU == ix.nodoPorPar.end() || itV == ix.nodoPorPar.end()) continue;
+            const int u = itU->second;
+            const int v = itV->second;
             g.adj[u].push_back({v, minutos, false});
             g.adj[v].push_back({u, minutos, false});
         }
@@ -194,61 +291,18 @@ bool cargarGrafo(const std::string& dirDatos, double transbordo, Graph& g, bool 
         for (int desde : g.estaciones[i].lineas) {
             for (int hasta : g.estaciones[i].lineas) {
                 if (desde == hasta) continue;
-                const int u = g.nodo(static_cast<int>(i), desde);
-                const int v = g.nodo(static_cast<int>(i), hasta);
-                if (u >= 0 && v >= 0) g.adj[u].push_back({v, transbordo, true});
+                const auto itU = ix.nodoPorPar.find(static_cast<long long>(i) * 1000 + desde);
+                const auto itV = ix.nodoPorPar.find(static_cast<long long>(i) * 1000 + hasta);
+                if (itU == ix.nodoPorPar.end() || itV == ix.nodoPorPar.end()) continue;
+                g.adj[itU->second].push_back({itV->second, transbordo, true});
             }
         }
     }
     // Rutas de bus: tramos entre paradas consecutivas y acceso a pie a las
     // estaciones. El acceso se marca como transbordo porque cambia de línea.
     if (conBuses) {
-        std::vector<std::vector<int>> nodosPorEstacion(g.estaciones.size());
-        for (std::size_t n = 0; n < g.nodos.size(); ++n) {
-            nodosPorEstacion[static_cast<std::size_t>(g.nodos[n].estacion)]
-                .push_back(static_cast<int>(n));
-        }
-
-        std::ifstream tramosBus(dirDatos + "/bus_tramos.csv");
-        if (tramosBus) {
-            std::string filaBus;
-            std::getline(tramosBus, filaBus);  // encabezado
-            while (std::getline(tramosBus, filaBus)) {
-                if (recortar(filaBus).empty()) continue;
-                const std::vector<std::string> c = dividir(filaBus, ',');
-                if (c.size() < 4) continue;
-                const int a = g.indiceEstacion(c[0]);
-                const int b = g.indiceEstacion(c[1]);
-                const int lin = g.indiceLinea(c[3]);
-                if (a < 0 || b < 0 || lin < 0) continue;
-                const int u = g.nodo(a, lin);
-                const int v = g.nodo(b, lin);
-                if (u < 0 || v < 0) continue;
-                g.adj[u].push_back({v, std::stod(c[2]), false});
-            }
-        }
-
-        // El CSV ya trae los dos sentidos del acceso; el de subida al bus
-        // incluye la espera, así que la arista se añade tal cual viene.
-        std::ifstream accesos(dirDatos + "/bus_acceso.csv");
-        if (accesos) {
-            std::string filaAcceso;
-            std::getline(accesos, filaAcceso);  // encabezado
-            while (std::getline(accesos, filaAcceso)) {
-                if (recortar(filaAcceso).empty()) continue;
-                const std::vector<std::string> c = dividir(filaAcceso, ',');
-                if (c.size() < 3) continue;
-                const int a = g.indiceEstacion(c[0]);
-                const int b = g.indiceEstacion(c[1]);
-                if (a < 0 || b < 0) continue;
-                const double minutos = std::stod(c[2]);
-                for (int desde : nodosPorEstacion[static_cast<std::size_t>(a)]) {
-                    for (int hasta : nodosPorEstacion[static_cast<std::size_t>(b)]) {
-                        g.adj[desde].push_back({hasta, minutos, true});
-                    }
-                }
-            }
-        }
+        cargarAristasDeBus(dirDatos, "bus", g, ix);
+        cargarAristasDeBus(dirDatos, "urb", g, ix);
     }
 
     // Se deja calculada la velocidad máxima, que A* usa en cada búsqueda.

@@ -100,28 +100,36 @@ dependencias) que sirve `web/index.html` y una API JSON: `/api/grafo`,
 arrastrar, fija origen y destino con dos clics y tiene el deslizador de
 transbordo, el selector de rutas de Yen, el simulado de estación cerrada y la
 comparación A* contra Dijkstra. El cálculo siempre queda en C++: el navegador
-solo pide JSON y dibuja. La casilla **Mostrar paradas de bus** dibuja las 1836
-paradas como puntos grises.
+solo pide JSON y dibuja. La casilla **Mostrar paradas de bus** dibuja las 11 879
+paradas como puntos grises (son muchos: se dibujan en ~75 ms, pero se leen mejor
+con el mapa acercado).
 
-## Buses alimentadores
+## Buses
 
-Además del Metro, el grafo incluye las **47 rutas alimentadoras** del sistema
-con sus **1836 paradas**, tomadas del portal geográfico del Metro
-(`metrogis.metrodemedellin.gov.co`, capas `ruta_alimentadora` y
-`Alimentadora_Parada`, consulta REST sin token). Con ellas el grafo pasa de 53 a
-**1889 nodos** y de 106 a **3794 aristas**, y las rutas pueden combinar metro y
-bus.
+Además del Metro, el grafo incluye dos conjuntos de rutas de bus: las **47
+alimentadoras** del Metro y las **209 rutas urbanas** de la Alcaldía, con
+**11 879 paradas** en total. El grafo pasa de 53 a **11 932 nodos** y de 106 a
+**30 610 aristas**, y las rutas pueden combinar metro y bus.
+
+- Alimentadoras: portal del Metro (`metrogis.metrodemedellin.gov.co`, capas
+  `ruta_alimentadora` y `Alimentadora_Parada`, REST sin token). La capa de
+  paradas no trae la secuencia, así que el script la obtiene proyectando cada
+  parada sobre la polilínea de su ruta.
+- Urbanas: servidor de mapas de la Alcaldía
+  (`medellin.gov.co/servidormapas`, servicio `VM_Movilidad`, capas 0 y 2). Aquí
+  la parada sí trae `nro_parada`, el orden dentro del recorrido.
 
 Cada parada entra como un nodo (parada, ruta), igual que las estaciones se
 modelan como (estación, línea); el acceso a pie de una parada a una estación a
 menos de 400 m se cobra como un transbordo, y subirse al bus suma 5 minutos de
 espera. Los algoritmos no cambiaron.
 
-Los CSV se regeneran con `python3 tools/construir_grafo_buses.py`, que descarga
-las capas y reescribe `data/bus_paradas.csv`, `data/bus_tramos.csv` y
-`data/bus_acceso.csv`. El script ordena las paradas de cada ruta
-proyectándolas sobre su polilínea, porque la capa de origen no trae la
-secuencia del recorrido.
+Los CSV se regeneran con:
+
+```bash
+python3 tools/construir_grafo_buses.py     # data/bus_*.csv
+python3 tools/construir_grafo_urbanos.py   # data/urb_*.csv
+```
 
 Para volver al modelo original, sin buses:
 
@@ -155,12 +163,13 @@ src/servidor.hpp/.cpp     servidor HTTP y API JSON para la interfaz web
 web/index.html            interfaz web (mapa interactivo, panel y comparación)
 src/main.cpp              menú de consola, modo --web y --metro
 tests/test_main.cpp       pruebas con assert
-tools/construir_grafo_buses.py  descarga las capas del Metro y genera los CSV de bus
+tools/construir_grafo_buses.py    descarga las capas del Metro y genera data/bus_*.csv
+tools/construir_grafo_urbanos.py  descarga las capas de la Alcaldía y genera data/urb_*.csv
 report/reporte.tex        reporte de la práctica
 ```
 
 La red de las ocho líneas del Metro es un árbol (46 estaciones y 45 tramos), así
 que entre dos estaciones existe un único camino simple: con `--metro`, Yen
-devuelve una sola ruta en los datos reales. Con las alimentadoras cargadas hay
-ciclos y Yen encuentra alternativas donde hay un bus cerca; en las estaciones sin
-alimentadora sigue devolviendo una sola, porque el camino es único de verdad.
+devuelve una sola ruta en los datos reales. Con los buses cargados hay ciclos y Yen
+encuentra alternativas donde pasa una ruta; en las nueve estaciones sin parada
+cerca sigue devolviendo una sola, porque el camino es único de verdad.

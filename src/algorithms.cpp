@@ -301,17 +301,20 @@ std::vector<int> puntosDeArticulacion(const Graph& g) {
     const int n = static_cast<int>(g.estaciones.size());
 
     // Se colapsa el grafo expandido a estaciones: dos estaciones son vecinas si
-    // hay un tramo entre ellas (los transbordos no cuentan como arista).
+    // hay un tramo entre ellas (los transbordos no cuentan como arista). Se usa
+    // un conjunto de pares y no una matriz n x n: con los buses urbanos hay
+    // ~12.000 estaciones y la matriz pedía 140 MB.
     std::vector<std::vector<int>> vecinos(n);
-    std::vector<std::vector<char>> visto(n, std::vector<char>(n, 0));
+    std::set<std::pair<int, int>> visto;
     for (std::size_t u = 0; u < g.nodos.size(); ++u) {
         const int a = g.nodos[u].estacion;
         for (const Arista& e : g.adj[u]) {
-            if (e.transbordo) continue;
             const int b = g.nodos[e.destino].estacion;
-            if (a == b || visto[a][b] != 0) continue;
-            visto[a][b] = 1;
-            visto[b][a] = 1;
+            // Los transbordos dentro de la misma estación no cuentan como
+            // arista; los accesos a pie entre parada y estación sí, porque
+            // conectan dos puntos distintos del sistema.
+            if (a == b) continue;
+            if (!visto.insert({std::min(a, b), std::max(a, b)}).second) continue;
             vecinos[a].push_back(b);
             vecinos[b].push_back(a);
         }

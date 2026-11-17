@@ -281,7 +281,18 @@ std::string manejarApi(Estado& e, const std::string& ruta,
         const std::string q = valorDe(params, "q");
         std::string salida = "{\"estaciones\":[";
         if (!q.empty()) {
-            const std::vector<int> coincidencias = e.trie.porPrefijo(q, 8);
+            // El Trie tiene ~12.000 entradas (estaciones y paradas). Se piden
+            // más de las necesarias y se ponen primero las estaciones del
+            // Metro, que es lo que el usuario suele buscar.
+            const std::vector<int> crudas = e.trie.porPrefijo(q, 40);
+            std::vector<int> coincidencias;
+            for (int i : crudas) {
+                if (!g.estaciones[static_cast<std::size_t>(i)].bus) coincidencias.push_back(i);
+            }
+            for (int i : crudas) {
+                if (g.estaciones[static_cast<std::size_t>(i)].bus) coincidencias.push_back(i);
+            }
+            if (coincidencias.size() > 8) coincidencias.resize(8);
             for (std::size_t i = 0; i < coincidencias.size(); ++i) {
                 if (i > 0) salida += ",";
                 salida += jsonEstacion(g, coincidencias[i]);

@@ -156,10 +156,10 @@ int main() {
     for (const Estacion& e : conBus.estaciones) {
         if (e.bus) ++paradas;
     }
-    assert(paradas == 1836);
-    assert(conBus.lineas.size() == 55);
-    assert(conBus.nodos.size() == 1889);
-    assert(conBus.totalAristas() == 3794);
+    assert(paradas == 11879);
+    assert(conBus.lineas.size() == 264);
+    assert(conBus.nodos.size() == 11932);
+    assert(conBus.totalAristas() == 30610);
 
     const Resultado baseBus = dijkstra(conBus, conBus.nodosDeEstacion(estacion(conBus, "san_antonio")),
                                        conBus.nodosDeEstacion(estacion(conBus, "arvi")));
@@ -176,8 +176,20 @@ int main() {
     const Resultado desvio = dijkstra(conBus, conBus.nodosDeEstacion(estacion(conBus, "san_antonio")),
                                       conBus.nodosDeEstacion(estacion(conBus, "acevedo")), &cierreBus);
     assert(desvio.encontrado);
+
+    // Con las rutas urbanas, cerrar San Antonio ya no aísla el occidente:
+    // Floresta -> Poblado encuentra desvío (baja en Cisneros y toma la A).
+    Bloqueo cierreSanAntonio(static_cast<int>(conBus.nodos.size()));
+    for (int n : conBus.nodosDeEstacion(estacion(conBus, "san_antonio"))) {
+        cierreSanAntonio.nodos[n] = 1;
+    }
+    const Resultado cruce = dijkstra(conBus, conBus.nodosDeEstacion(estacion(conBus, "floresta")),
+                                     conBus.nodosDeEstacion(estacion(conBus, "poblado")),
+                                     &cierreSanAntonio);
+    assert(cruce.encontrado);
     std::cout << "OK rutas de bus (" << paradas << " paradas, " << alternativas.size()
-              << " alternativas, desvio por " << desvio.costo << " min)\n";
+              << " alternativas, desvio por " << desvio.costo << " min, Floresta->Poblado con"
+              << " San Antonio cerrada: " << cruce.costo << " min)\n";
 
     std::cout << "Todas las pruebas pasaron\n";
     return 0;
