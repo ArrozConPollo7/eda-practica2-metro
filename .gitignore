@@ -3,3 +3,7 @@ out/
 *.o
 *.kra
 *.zip
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc

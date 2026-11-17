@@ -16,36 +16,45 @@ o MinGW-w64). El servidor web usa Winsock en Windows y sockets POSIX en Linux.
 
 ### Windows
 
-Desde la carpeta del proyecto, en "Símbolo del sistema" o PowerShell:
+Desde la carpeta del proyecto, en "Símbolo del sistema" o PowerShell, con
+MinGW-w64 (es el caso más común):
+
+```bat
+cmake -S . -B build -G "MinGW Makefiles"
+cmake --build build
+```
+
+El ejecutable queda en `build\navegador.exe`. Hace falta que `g++` y
+`mingw32-make` estén en el `PATH`; si CMake no encuentra el compilador, lo dice
+en el primer paso.
+
+Con Visual Studio (carga de trabajo "Desarrollo para el escritorio con C++") se
+omite el generador y se compila la configuración Release:
 
 ```bat
 cmake -S . -B build
 cmake --build build --config Release
 ```
 
-El ejecutable queda en `build\Release\navegador.exe` con Visual Studio, o en
-`build\navegador.exe` con MinGW o Ninja. También se puede hacer doble clic en
-`compilar_windows.bat`.
+En ese caso el ejecutable queda en `build\Release\navegador.exe`.
 
 **Opción A, interfaz web** (lanzar desde la carpeta del proyecto, porque el
 servidor busca `web\index.html` relativo a la carpeta actual):
 
 ```bat
-build\Release\navegador.exe --web
+build\navegador.exe --web
 ```
 
-y abrir <http://localhost:8080>. Doble clic en `ejecutar_web.bat` hace lo mismo:
-levanta el servidor y abre el navegador.
+y abrir <http://localhost:8080>. El servidor escucha solo en `127.0.0.1`, así
+que no expone el puerto a la red ni pide permisos de Firewall.
 
 **Opción B, solo consola** (el `main` con el menú):
 
 ```bat
-build\Release\navegador.exe
+build\navegador.exe
 ```
 
-Doble clic en `ejecutar_consola.bat`.
-
-Pruebas: `build\Release\pruebas.exe`.
+Pruebas: `build\pruebas.exe` (o `build\Release\pruebas.exe`).
 
 ### Linux
 

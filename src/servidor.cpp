@@ -374,7 +374,9 @@ int iniciarServidor(const std::string& carpetaDatos, double transbordo, int puer
 
     sockaddr_in direccion{};
     direccion.sin_family = AF_INET;
-    direccion.sin_addr.s_addr = INADDR_ANY;
+    // Loopback a propósito: la interfaz es local y así Windows no pide permiso
+    // al Firewall por exponer el puerto a la red.
+    direccion.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     direccion.sin_port = htons(static_cast<uint16_t>(puerto));
     if (::bind(servidor, reinterpret_cast<sockaddr*>(&direccion),
                static_cast<int>(sizeof(direccion))) < 0) {
@@ -390,7 +392,9 @@ int iniciarServidor(const std::string& carpetaDatos, double transbordo, int puer
 
     while (true) {
         const socket_t cliente = ::accept(servidor, nullptr, nullptr);
-        if (cliente < 0) continue;
+        // accept devuelve INVALID_SOCKET al fallar; en Windows SOCKET no tiene
+        // signo, así que comparar contra cero no sirve.
+        if (!socketValido(cliente)) continue;
 
         char buffer[4096] = {0};
         const auto leidos = ::recv(cliente, buffer, sizeof(buffer) - 1, 0);

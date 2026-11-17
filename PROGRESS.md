@@ -1,15 +1,32 @@
 # PROGRESS
 
-Fase actual: 9 (interfaz web). Fases 1 a 9 completas y verificadas. Entrega lista.
-Decisiones:
-- ids de estación tipo slug (`san_antonio`); la columna `linea` lleva "A|K" en los intercambiadores.
-- grafo expandido (estación, línea): el transbordo es una arista más, con penalización configurable (3,0 min por defecto).
-- minutos = 60 · distancia_haversine / velocidad de la línea (A 36, B 31, K y J 14, L 18, H y M 16, T-A 17 km/h).
-- A*: v_max = 1,05 · máxima velocidad observada; h precalculada una vez por nodo.
-- la red es un árbol (46 estaciones, 45 tramos): Yen devuelve 1 ruta y se valida con un grafo sintético con ciclo.
-- salidas del programa: out/route.{dot,json,svg} (o out/grafo.* si no hay ruta).
+Entrega lista (17-nov-2026). Fases 1 a 8 cerradas y verificadas en Linux y en
+Windows con MinGW-w64 (cross-compilado, 0 warnings en ambos).
 
-Comandos: `cmake -S . -B build && cmake --build build -j4` ; `./build/navegador` ; `./build/navegador --web` ; `./build/pruebas`.
-Interfaz web: src/servidor.cpp (sockets POSIX, API JSON) + web/index.html (mapa SVG interactivo).
-Reporte: `cd report && pdflatex reporte.tex` dos veces (o tectonic). Genera reporte.pdf de 23 páginas.
-Entrega: practica2_eda.zip (25 archivos, sin build/) + report/reporte.pdf (23 páginas).
+## Cambios de la revisión de entrega
+
+- Se quitaron los tres `.bat` (compilar_windows, ejecutar_web, ejecutar_consola):
+  Windows los marcaba con SmartScreen porque el zip trae Mark-of-the-Web, y el
+  profesor recibe mejor un proyecto sin scripts ejecutables. README y reporte
+  ahora documentan los dos comandos de CMake.
+- `src/servidor.cpp`: bind a `127.0.0.1` en vez de `INADDR_ANY` (sin aviso del
+  Firewall de Windows, la interfaz es local).
+- `src/servidor.cpp`: `accept` se valida con `socketValido()` en vez de `< 0`;
+  en Windows `SOCKET` no tiene signo y la comparación siempre era falsa
+  (warning `-Wtype-limits` que solo aparece al compilar con MinGW).
+- `.gitignore`: auxiliares de LaTeX.
+- `practica2_eda.zip` regenerado: 27 archivos, sin `PROGRESS.md`, sin `.bat` ni
+  `build/`.
+
+## Comandos
+
+- Linux: `cmake -S . -B build && cmake --build build -j4`; `./build/pruebas`.
+- Windows MinGW: `cmake -S . -B build -G "MinGW Makefiles" && cmake --build build`.
+- Reporte: `cd report && pdflatex reporte.tex` dos veces (24 páginas).
+- Entrega: `practica2_eda.zip` + `report/reporte.pdf`.
+
+## Verificación hecha
+
+Zip descomprimido en carpeta limpia: compila sin warnings, las 9 pruebas pasan,
+el servidor responde (`/api/ruta` y `/` con HTTP 200) y el PDF del zip es el de
+24 páginas.

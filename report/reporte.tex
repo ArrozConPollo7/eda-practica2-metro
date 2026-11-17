@@ -183,34 +183,43 @@ sistemas; solo cambia la ruta del ejecutable.
 
 \subsection*{Compilar}
 Desde la carpeta del proyecto, en Windows con ``Símbolo del sistema'' o
-PowerShell:
+PowerShell y MinGW-w64 (hay que tener \arch{g++} y \arch{mingw32-make} en el
+\arch{PATH}):
+
+\begin{lstlisting}[style=term]
+cmake -S . -B build -G "MinGW Makefiles"
+cmake --build build
+\end{lstlisting}
+
+El ejecutable queda en \arch{build\textbackslash{}navegador.exe}. Con Visual
+Studio (carga de trabajo \emph{Desarrollo para el escritorio con C++}) se omite
+el generador y se compila Release:
 
 \begin{lstlisting}[style=term]
 cmake -S . -B build
 cmake --build build --config Release
 \end{lstlisting}
 
-Con Visual Studio el ejecutable queda en
-\arch{build\textbackslash{}Release\textbackslash{}navegador.exe}; con MinGW o Ninja, en
-\arch{build\textbackslash{}navegador.exe}. El \arch{CMakeLists.txt} fija
-\arch{CMAKE\_CXX\_STANDARD 17} y \arch{CMAKE\_CXX\_EXTENSIONS OFF}, y compila sin
-advertencias (Anexo~\ref{anexo:compila}). En Windows también se puede hacer doble
-clic en \arch{compilar\_windows.bat}, que ejecuta los dos pasos y dice dónde quedó
-el ejecutable.
+y el ejecutable queda en la subcarpeta \arch{Release} de \arch{build}. El
+\arch{CMakeLists.txt} fija el estándar C++17 y desactiva las extensiones del
+compilador, y compila sin advertencias (Anexo~\ref{anexo:compila}). El proyecto
+no incluye scripts de por medio: los dos comandos anteriores son todo lo
+necesario.
 
 \subsection*{Opción A: interfaz web}
 Se levanta el servidor y se abre \arch{http://localhost:8080} en el navegador:
 
 \begin{lstlisting}[style=term]
 cd C:\ruta\a\practica2
-build\Release\navegador.exe --web
+build\navegador.exe --web
 \end{lstlisting}
 
 Hay que lanzarlo desde la carpeta del proyecto, porque el servidor busca
 \arch{web\textbackslash{}index.html} relativo a la carpeta actual (y si no lo encuentra,
 \arch{..\textbackslash{}web\textbackslash{}index.html}). Para usar otro puerto:
-\arch{navegador.exe --web 9000}. En Windows, doble clic en
-\arch{ejecutar\_web.bat}: levanta el servidor y abre el navegador.
+\arch{navegador.exe --web 9000}. El servidor escucha solo en
+\arch{127.0.0.1}: la interfaz es local, así que no expone el puerto a la red ni
+dispara el aviso del Firewall de Windows.
 
 \subsection*{Opción B: solo consola (\arch{main})}
 Sin \arch{--web}, el programa corre el menú interactivo de consola, que es el
@@ -218,10 +227,10 @@ Sin \arch{--web}, el programa corre el menú interactivo de consola, que es el
 
 \begin{lstlisting}[style=term]
 cd C:\ruta\a\practica2
-build\Release\navegador.exe
+build\navegador.exe
 \end{lstlisting}
 
-En Windows, doble clic en \arch{ejecutar\_consola.bat}. El menú tiene las siete
+El menú tiene las siete
 opciones: autocompletar con Trie, ruta más rápida con Dijkstra, A* contra
 Dijkstra, rutas alternativas de Yen, simulación de estación cerrada, puntos de
 articulación y exportación a DOT, JSON y SVG. La opción 7 crea
@@ -232,8 +241,9 @@ articulación y exportación a DOT, JSON y SVG. La opción 7 crea
 Las pruebas con \arch{assert} se compilan y corren igual:
 
 \begin{lstlisting}[style=term]
-build\Release\pruebas.exe        :: Windows
-./build/pruebas                  # Linux
+build\pruebas.exe         :: Windows (MinGW)
+build\Release\pruebas.exe :: Windows (Visual Studio)
+./build/pruebas           # Linux
 \end{lstlisting}
 
 En Linux los mismos pasos son:
@@ -982,6 +992,12 @@ $ cmake -S . -B build && cmake --build build -j4
 
 (sin advertencias: grep -c warning sobre la salida completa del build da 0)
 \end{lstlisting}
+
+El mismo código se compiló también para Windows con MinGW-w64 (GCC 12),
+indicándole a CMake que el sistema destino es Windows, y tampoco produjo
+advertencias: genera \arch{navegador.exe} y \arch{pruebas.exe}. Ese paso es el
+que ejercita de verdad el bloque \arch{\#ifdef \_WIN32} de
+\arch{src/servidor.cpp} y el enlace contra \arch{ws2\_32}.
 
 Las pruebas:
 
