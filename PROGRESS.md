@@ -35,8 +35,9 @@ Entrega lista (17-nov-2026). Verificado en Linux y en Windows con MinGW-w64
   `Graph::indiceEstacion`/`Graph::nodo` eran O(n) por fila.
 - Autocompletado: las estaciones del Metro van primero (el Trie tiene 11 925
   entradas).
-- `entrega_practica2.zip`: 34 archivos, sin `PROGRESS.md`, sin `.bat`, sin `build/` y
-  sin `report/reporte.pdf` (el informe va aparte).
+- `entrega_practica2.zip`: 24 archivos, solo lo que hace falta para compilar y
+  ejecutar (fuentes, datos, `web/` y los dos generadores). Sin `report/`, `PROGRESS.md`,
+  `.bat`, `build/` ni nada de git.
 
 ## Comandos
 
@@ -49,7 +50,7 @@ Entrega lista (17-nov-2026). Verificado en Linux y en Windows con MinGW-w64
 ## Verificación hecha
 
 Zip descomprimido en carpeta limpia: compila sin warnings, las 10 pruebas pasan,
-el servidor responde (`/api/ruta` con 3 alternativas, el desvío de Floresta y
-`/` con HTTP 200) y el informe se regenera desde el zip con pdflatex (27 páginas,
-2 desbordes de 1 pt). En Windows (MinGW GCC 16.2) se compiló y se comprobó el
-mismo desvío.
+el servidor responde (`/` con HTTP 200, el desvío de Floresta con 22,8 min) y
+`/api/grafo` pesa 1,1 MB. En Windows (MinGW GCC 16.2) se compiló y se comprobó
+el mismo desvío. El PDF del informe va aparte y se regenera con pdflatex desde
+`report/` del repositorio (27 páginas).

@@ -165,7 +165,6 @@ src/main.cpp              menú de consola, modo --web y --metro
 tests/test_main.cpp       pruebas con assert
 tools/construir_grafo_buses.py    descarga las capas del Metro y genera data/bus_*.csv
 tools/construir_grafo_urbanos.py  descarga las capas de la Alcaldía y genera data/urb_*.csv
-report/reporte.tex        reporte de la práctica
 ```
 
 La red de las ocho líneas del Metro es un árbol (46 estaciones y 45 tramos), así
