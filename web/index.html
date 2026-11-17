@@ -622,6 +622,19 @@ async function consultar() {
   pintarResultado(datos);
   pintarComparacion(datos);
   pintarRutaEnMapa();
+
+  // Sin ruta y con una estación cerrada hace falta saber si esa estación es un
+  // punto de articulación, para explicar por qué no hay desvío.
+  if (!datos.encontrada && estado.cerrada && estado.articulacion.length === 0) {
+    try {
+      const a = await (await fetch("/api/articulacion")).json();
+      if (mio !== peticion) return;
+      estado.articulacion = a.puntos.map(p => p.id);
+      pintarResultado(datos);
+    } catch (e) {
+      // Si falla, se queda el mensaje genérico.
+    }
+  }
 }
 
 function chipLinea(codigo) {
@@ -642,9 +655,18 @@ function pintarResultado(datos) {
 
   if (!datos.encontrada) {
     caja.className = "aviso";
-    caja.innerHTML = estado.cerrada
-      ? "No hay ruta con esa estación cerrada. Prueba sin cerrarla o cambia el destino."
-      : "No hay ruta entre esas dos estaciones.";
+    if (estado.cerrada) {
+      // Si la estación cerrada es punto de articulación, el mensaje lo dice:
+      // cerrar San Antonio, por ejemplo, aísla todo el ramal de la línea B.
+      const esCorte = estado.articulacion.includes(estado.cerrada);
+      caja.innerHTML = esCorte
+        ? `Cerrar ${estado.porId.get(estado.cerrada).nombre} corta la red: es punto de ` +
+          `articulación y no queda camino alterno en este modelo, porque las ` +
+          `alimentadoras no cruzan de un ramal a otro.`
+        : "No hay ruta con esa estación cerrada. Prueba sin cerrarla o cambia el destino.";
+    } else {
+      caja.innerHTML = "No hay ruta entre esas dos estaciones.";
+    }
     return;
   }
   if (estado.rutas.length === 0) {
@@ -742,7 +764,10 @@ function pintarRutaEnMapa() {
   capaRuta.innerHTML = svgRuta;
   dibujarEtiquetas(ruta);
 
-  if (estado.articulacion.length) {
+  // Los puntos de articulación solo se dibujan si la casilla está marcada; el
+  // arreglo puede tener datos aunque no se hayan pedido (para el mensaje de
+  // "estación cerrada").
+  if (document.getElementById("articulacion").checked && estado.articulacion.length) {
     capaRuta.innerHTML += estado.articulacion.map(id => {
       const e = estado.porId.get(id);
       return `<circle cx="${proyeccion.x(e.lon).toFixed(1)}" cy="${proyeccion.y(e.lat).toFixed(1)}"

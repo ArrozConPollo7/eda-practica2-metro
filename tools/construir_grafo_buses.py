@@ -175,7 +175,10 @@ def main():
     print("rutas:", len(lineas), "| paradas:", sum(len(v) for v in por_ruta.values()),
           "| asignadas a una polilinea:", len(asignadas), "| sin nombre en la fuente:", sin_nombre)
     print("tramos de bus:", len(tramos), "| accesos a pie:", len(acceso))
-    estaciones_tocadas = {a[1] for a in acceso if not a[1].startswith("p")}
+    # Ojo: no sirve filtrar por el prefijo "p", porque hay estaciones que
+    # empiezan con p (poblado, prado, parque_berrio). Se compara contra la lista.
+    ids_metro = {e[0] for e in estaciones}
+    estaciones_tocadas = {x for a in acceso for x in (a[0], a[1]) if x in ids_metro}
     print("estaciones con al menos una parada a <400 m:", len(estaciones_tocadas), "de", len(estaciones))
 
 

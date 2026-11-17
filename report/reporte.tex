@@ -940,8 +940,9 @@ Carga desde los CSV         & 2 ms  & 19 ms \\
 \label{tab:tamano}
 \end{table}
 
-Veinte de las 46 estaciones tienen al menos una parada a menos de 400 metros. Las
-otras 26 no ganan nada con este modelo, y eso se nota en los resultados.
+Veintitrés de las 46 estaciones tienen al menos una parada a menos de 400 metros;
+las otras 23 no ganan nada con este modelo, y eso se nota en los resultados.
+Floresta, por ejemplo, queda igual que con el Metro solo.
 
 \subsection{Qué cambia}
 
@@ -1085,8 +1086,10 @@ las desactive en silencio.
         ciclos. Por eso, con solo el Metro, Yen devuelve una sola ruta entre
         cualquier par y 40 de las 46 estaciones son puntos de articulación. Las
         alimentadoras agregan ciclos y arreglan las alternativas, pero solo donde
-        hay una parada cerca: en 26 de las 46 estaciones el modelo con buses es
-        idéntico al del Metro.
+        hay una parada cerca: en 23 de las 46 estaciones el modelo con buses es
+        idéntico al del Metro. Cerrar San Antonio es el caso extremo: es el único
+        punto donde la línea B se une a la A, así que al cerrarlo todo el ramal
+        occidental queda aislado y ninguna alimentadora lo cruza.
   \item \textbf{Las coordenadas son las publicadas, no medidas.} Cinco cifras
         decimales dan precisión de metros, suficiente para dibujar y para estimar
         distancias, pero un tramo real no es una recta entre dos estaciones: el
