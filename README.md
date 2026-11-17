@@ -28,6 +28,11 @@ El ejecutable queda en `build\navegador.exe`. Hace falta que `g++` y
 `mingw32-make` estén en el `PATH`; si CMake no encuentra el compilador, lo dice
 en el primer paso.
 
+> Si `cmake` responde `CMAKE_MAKE_PROGRAM is not set`, MinGW no está en el
+> `PATH`. Windows no trae compilador de C++: hay que instalar MinGW-w64
+> ([winlibs](https://winlibs.com/) o MSYS2) y añadir su carpeta `bin` al `PATH`
+> antes de repetir los dos comandos.
+
 Con Visual Studio (carga de trabajo "Desarrollo para el escritorio con C++") se
 omite el generador y se compila la configuración Release:
 
