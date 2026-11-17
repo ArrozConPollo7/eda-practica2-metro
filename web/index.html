@@ -245,6 +245,11 @@
         <input type="checkbox" id="articulacion"> Marcar puntos de articulación
       </label>
     </div>
+    <div class="control">
+      <label class="casilla">
+        <input type="checkbox" id="verParadas"> Mostrar paradas de bus
+      </label>
+    </div>
   </div>
 
   <div class="tarjeta" id="tarjetaResultado">
@@ -271,7 +276,7 @@
 
 <main>
   <svg id="mapa" xmlns="http://www.w3.org/2000/svg">
-    <g id="camara"><g id="capaLineas"></g><g id="capaEstaciones"></g><g id="capaRuta"></g><g id="capaEtiquetas"></g></g>
+    <g id="camara"><g id="capaLineas"></g><g id="capaParadas"></g><g id="capaEstaciones"></g><g id="capaRuta"></g><g id="capaEtiquetas"></g></g>
   </svg>
   <div class="ayuda">Clic en una estación: <b>origen</b> y luego <b>destino</b> · rueda para acercar</div>
   <div class="leyenda" id="leyenda"></div>
@@ -285,7 +290,7 @@
 "use strict";
 
 const estado = {
-  estaciones: [], lineas: [], aristas: [],
+  estaciones: [], paradas: [], lineas: [], aristas: [],
   porId: new Map(),
   colorLinea: new Map(),
   origen: null, destino: null,
@@ -294,9 +299,14 @@ const estado = {
   articulacion: []
 };
 
+// Las ocho líneas del Metro; todo lo demás es una ruta alimentadora de bus.
+const LINEAS_METRO = new Set(["A", "B", "K", "J", "L", "H", "M", "T-A"]);
+const esMetro = codigo => LINEAS_METRO.has(codigo);
+
 const svg = document.getElementById("mapa");
 const camara = document.getElementById("camara");
 const capaLineas = document.getElementById("capaLineas");
+const capaParadas = document.getElementById("capaParadas");
 const capaEstaciones = document.getElementById("capaEstaciones");
 const capaRuta = document.getElementById("capaRuta");
 const capaEtiquetas = document.getElementById("capaEtiquetas");
@@ -310,14 +320,22 @@ const fmt = (v, d = 1) => v.toFixed(d).replace(".", ",");
 async function cargarRed() {
   const datos = await (await fetch("/api/grafo")).json();
   estado.estaciones = datos.estaciones;
+  estado.paradas = datos.paradas || [];
   estado.lineas = datos.lineas;
   estado.aristas = datos.aristas;
   for (const e of datos.estaciones) estado.porId.set(e.id, e);
+  // Las paradas también se indexan: una ruta con bus devuelve ids de parada y
+  // el mapa necesita sus coordenadas.
+  for (const p of estado.paradas) estado.porId.set(p.id, p);
   for (const l of datos.lineas) estado.colorLinea.set(l.codigo, l.color);
 
+  const nMetro = estado.lineas.filter(l => esMetro(l.codigo)).length;
+  const nBus = estado.lineas.length - nMetro;
   document.getElementById("datosRed").textContent =
-    `${datos.estaciones.length} estaciones · ${datos.lineas.length} líneas · ` +
-    `${datos.aristas.length} tramos`;
+    `${datos.estaciones.length} estaciones · ${nMetro} líneas` +
+    (nBus ? ` · ${nBus} rutas de bus` : "") +
+    ` · ${datos.aristas.length} tramos` +
+    (estado.paradas.length ? ` · ${estado.paradas.length} paradas` : "");
 
   dibujarMapa();
   llenarSelectCerrada();
@@ -326,8 +344,11 @@ async function cargarRed() {
 
 function dibujarLeyenda() {
   const caja = document.getElementById("leyenda");
-  caja.innerHTML = estado.lineas.map(l =>
-    `<span><i style="background:${l.color}"></i>${l.codigo}</span>`).join("");
+  const metro = estado.lineas.filter(l => esMetro(l.codigo));
+  const hayBus = estado.lineas.some(l => !esMetro(l.codigo));
+  caja.innerHTML = metro.map(l =>
+    `<span><i style="background:${l.color}"></i>${l.codigo}</span>`).join("") +
+    (hayBus ? `<span><i style="background:#9AA0A6"></i>bus</span>` : "");
 }
 
 function llenarSelectCerrada() {
@@ -374,6 +395,14 @@ function dibujarMapa() {
       stroke="${estado.colorLinea.get(a.l)}" stroke-width="4.5" stroke-linecap="round"
       opacity="0.42"/>`;
   }).join("");
+
+  capaParadas.innerHTML = document.getElementById("verParadas").checked
+    ? estado.paradas.map(p => {
+        const x = proyeccion.x(p.lon).toFixed(1), y = proyeccion.y(p.lat).toFixed(1);
+        return `<circle cx="${x}" cy="${y}" r="2.1" fill="#9AA0A6" opacity="0.8">` +
+               `<title>${p.nombre} · ${p.ruta}</title></circle>`;
+      }).join("")
+    : "";
 
   capaEstaciones.innerHTML = estado.estaciones.map(e => {
     const grande = e.lineas.length > 1;
@@ -596,8 +625,16 @@ async function consultar() {
 }
 
 function chipLinea(codigo) {
-  return `<span class="etiqueta" style="background:${estado.colorLinea.get(codigo)};` +
-    `${codigo === "J" ? "color:#1a1a1a" : ""}">${codigo}</span>`;
+  const color = estado.colorLinea.get(codigo) || "#9AA0A6";
+  const texto = esMetro(codigo) ? codigo : `bus ${codigo}`;
+  const oscuro = codigo === "J" || !esMetro(codigo);
+  return `<span class="etiqueta" style="background:${color};` +
+    `${oscuro ? "color:#1a1a1a" : ""}">${texto}</span>`;
+}
+
+// Texto del cambio de línea: en bus se dice "bus", no "línea".
+function nombreLinea(codigo) {
+  return esMetro(codigo) ? `línea ${codigo}` : `bus ${codigo}`;
 }
 
 function pintarResultado(datos) {
@@ -618,13 +655,28 @@ function pintarResultado(datos) {
 
   const ruta = estado.rutas[estado.activa];
   const lineas = [...new Set(ruta.paradas.map(p => p.linea))];
-  const transbordos = lineas.length - 1;
+  const deBus = ruta.paradas.filter(p => !esMetro(p.linea)).length;
+  let transbordos = 0;
+  for (let i = 1; i < ruta.paradas.length; i++) {
+    if (ruta.paradas[i].linea !== ruta.paradas[i - 1].linea) transbordos++;
+  }
 
   let html = `<div class="tiempo"><strong>${fmt(ruta.minutos)}</strong><span>minutos</span></div>`;
   html += `<div class="etiquetas">${lineas.map(chipLinea).join("")}</div>`;
-  html += `<div class="resumen">${ruta.paradas.length} estaciones · ` +
-          `${transbordos} transbordo${transbordos === 1 ? "" : "s"}` +
+  html += `<div class="resumen">${ruta.paradas.length} paradas` +
+          (deBus ? ` (${deBus} de bus)` : "") +
+          ` · ${transbordos} transbordo${transbordos === 1 ? "" : "s"}` +
           (estado.cerrada ? ` · ${estado.porId.get(estado.cerrada).nombre} cerrada` : "") + `</div>`;
+
+  // Con k > 1 el usuario espera varias; si la red es un árbol hay una sola y
+  // conviene decirlo en vez de dejar el selector como si no hiciera nada.
+  if (estado.k > 1 && estado.rutas.length === 1) {
+    html += `<div class="resumen">` +
+      (estado.cerrada
+        ? "Con esa estación cerrada solo queda este camino."
+        : "No hay otra ruta simple entre estas paradas: el camino es único en la red.") +
+      `</div>`;
+  }
 
   if (estado.rutas.length > 1) {
     html += `<div class="alternativas">` + estado.rutas.map((r, i) => {
@@ -637,7 +689,7 @@ function pintarResultado(datos) {
   html += `<ol class="paradas">`;
   ruta.paradas.forEach((p, i) => {
     if (i > 0 && ruta.paradas[i - 1].linea !== p.linea) {
-      html += `<li class="transbordo"><span></span>transbordo a línea ${p.linea} en ${ruta.paradas[i - 1].nombre}</li>`;
+      html += `<li class="transbordo"><span></span>transbordo a ${nombreLinea(p.linea)} en ${ruta.paradas[i - 1].nombre}</li>`;
     }
     html += `<li><span class="marca" style="background:${estado.colorLinea.get(p.linea)}"></span>` +
             `<span>${p.nombre}</span><span class="min">${fmt(p.acum)}</span></li>`;
@@ -722,6 +774,12 @@ document.getElementById("articulacion").addEventListener("change", async ev => {
   if (!ev.target.checked) estado.articulacion = [];
   if (estado.rutas.length) pintarRutaEnMapa();
   else capaRuta.innerHTML = "";
+});
+
+// Capa de paradas de bus: solo se dibuja cuando se piden (son 1836 puntos).
+document.getElementById("verParadas").addEventListener("change", () => {
+  dibujarMapa();
+  if (estado.rutas.length) pintarRutaEnMapa();
 });
 
 window.addEventListener("resize", () => {

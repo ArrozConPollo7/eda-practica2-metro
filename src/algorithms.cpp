@@ -194,6 +194,30 @@ Resultado astar(const Graph& g, int origen, int destino, const Bloqueo* bloqueo)
     return astar(g, std::vector<int>{origen}, std::vector<int>{destino}, bloqueo);
 }
 
+namespace {
+
+// Firma de una ruta para comparar alternativas: estaciones del Metro visitadas
+// más los buses usados. Ignora las paradas que solo se tocan al entrar o salir
+// del bus, para que un rodeo peatonal no cuente como ruta distinta.
+std::vector<int> firmaRuta(const Graph& g, const std::vector<int>& camino) {
+    std::vector<int> firma;
+    for (int est : estacionesDeRuta(g, camino)) {
+        if (!g.estaciones[est].bus) firma.push_back(est);
+    }
+    std::vector<char> usadas(g.lineas.size(), 0);
+    for (int n : camino) {
+        if (!g.estaciones[g.nodos[n].estacion].bus) continue;
+        const int linea = g.nodos[n].linea;
+        if (linea >= 0 && static_cast<std::size_t>(linea) < usadas.size() && usadas[linea] == 0) {
+            usadas[linea] = 1;
+            firma.push_back(100000 + linea);
+        }
+    }
+    return firma;
+}
+
+}  // namespace
+
 std::vector<Resultado> yen(const Graph& g, int origen, int destino, int k) {
     std::vector<Resultado> aceptadas;
     if (k <= 0) return aceptadas;
@@ -232,12 +256,12 @@ std::vector<Resultado> yen(const Graph& g, int origen, int destino, int k) {
             const double costo = costoDeCamino(g, total);
             if (costo < 0.0) continue;
 
-            // Dos caminos que pasan por las mismas estaciones no son rutas
-            // alternativas: solo cambian de línea de más dentro de una estación.
-            const std::vector<int> estaciones = estacionesDeRuta(g, total);
+            // Dos caminos que pasan por las mismas estaciones y usan los mismos
+            // buses no son rutas alternativas.
+            const std::vector<int> firma = firmaRuta(g, total);
             bool repetida = false;
             for (const Resultado& p : aceptadas) {
-                if (estacionesDeRuta(g, p.nodos) == estaciones) {
+                if (firmaRuta(g, p.nodos) == firma) {
                     repetida = true;
                     break;
                 }
@@ -251,9 +275,9 @@ std::vector<Resultado> yen(const Graph& g, int origen, int destino, int k) {
         bool elegida = false;
         for (auto it = candidatos.begin(); it != candidatos.end(); ++it) {
             bool repetida = false;
-            const std::vector<int> estaciones = estacionesDeRuta(g, it->second);
+            const std::vector<int> firma = firmaRuta(g, it->second);
             for (const Resultado& p : aceptadas) {
-                if (p.nodos == it->second || estacionesDeRuta(g, p.nodos) == estaciones) {
+                if (p.nodos == it->second || firmaRuta(g, p.nodos) == firma) {
                     repetida = true;
                     break;
                 }

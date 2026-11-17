@@ -4,13 +4,15 @@
 #include <string>
 #include <vector>
 
-// Una estación del sistema (una fila de data/stations.csv).
+// Una estación del sistema (una fila de data/stations.csv) o una parada de bus
+// (una fila de data/bus_paradas.csv).
 struct Estacion {
-    std::string id;            // identificador corto: "san_antonio"
+    std::string id;            // identificador corto: "san_antonio", "p1234"
     std::string nombre;        // nombre para mostrar: "San Antonio"
     double lat = 0.0;
     double lon = 0.0;
     std::vector<int> lineas;   // índices dentro de Graph::lineas
+    bool bus = false;          // true si es parada de una ruta alimentadora
 };
 
 // Línea del sistema, con el color que usa el SVG.

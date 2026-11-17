@@ -89,12 +89,19 @@ def main():
 
     # Paradas agrupadas por codigo de ruta.
     por_ruta = {}
+    sin_nombre = 0
     for f in paradas:
         p = f["properties"]
         lon, lat = f["geometry"]["coordinates"][:2]
+        # La fuente trae nombres con tabulaciones y 354 paradas sin nombre; se
+        # normaliza el texto y se les pone un identificador legible.
+        nombre = " ".join((p.get("parada") or p.get("label") or "").split())
+        if not nombre:
+            nombre = "Parada %s %d" % (p["ruta"], p["objectid"])
+            sin_nombre += 1
         por_ruta.setdefault(p["ruta"], []).append({
             "id": "p%d" % p["objectid"],
-            "nombre": p["parada"],
+            "nombre": nombre,
             "lat": lat,
             "lon": lon,
             "ruta": p["ruta"],
@@ -166,7 +173,7 @@ def main():
         w.writerows(acceso)
 
     print("rutas:", len(lineas), "| paradas:", sum(len(v) for v in por_ruta.values()),
-          "| asignadas a una polilinea:", len(asignadas))
+          "| asignadas a una polilinea:", len(asignadas), "| sin nombre en la fuente:", sin_nombre)
     print("tramos de bus:", len(tramos), "| accesos a pie:", len(acceso))
     estaciones_tocadas = {a[1] for a in acceso if not a[1].startswith("p")}
     print("estaciones con al menos una parada a <400 m:", len(estaciones_tocadas), "de", len(estaciones))

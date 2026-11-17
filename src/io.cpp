@@ -26,7 +26,9 @@ std::string colorDeLinea(const std::string& codigo) {
     if (codigo == "H") return "#FF0061";
     if (codigo == "M") return "#622081";
     if (codigo == "T-A") return "#15C240";
-    return "#666666";
+    // Cualquier otro código es una ruta alimentadora: gris claro para que no
+    // compita visualmente con las líneas del Metro.
+    return "#9AA0A6";
 }
 
 std::string recortar(std::string texto) {
@@ -84,7 +86,7 @@ bool estaEnCamino(const std::vector<int>& camino, int nodo) {
 
 }  // namespace
 
-bool cargarGrafo(const std::string& dirDatos, double transbordo, Graph& g) {
+bool cargarGrafo(const std::string& dirDatos, double transbordo, Graph& g, bool conBuses) {
     g = Graph{};
 
     std::ifstream estaciones(dirDatos + "/stations.csv");
@@ -113,6 +115,35 @@ bool cargarGrafo(const std::string& dirDatos, double transbordo, Graph& g) {
         g.estaciones.push_back(e);
     }
     estaciones.close();
+
+    // Rutas alimentadoras: cada parada se suma como una estación más, con la
+    // ruta de bus como si fuera una línea. Así el grafo expandido no cambia y
+    // el acceso a pie funciona como un transbordo.
+    if (conBuses) {
+        std::ifstream paradas(dirDatos + "/bus_paradas.csv");
+        if (paradas) {
+            std::string filaParada;
+            std::getline(paradas, filaParada);  // encabezado
+            while (std::getline(paradas, filaParada)) {
+                if (recortar(filaParada).empty()) continue;
+                const std::vector<std::string> c = dividir(filaParada, ',');
+                if (c.size() < 5) continue;
+                int indice = g.indiceLinea(c[4]);
+                if (indice < 0) {
+                    g.lineas.push_back({c[4], colorDeLinea(c[4])});
+                    indice = static_cast<int>(g.lineas.size()) - 1;
+                }
+                Estacion p;
+                p.id = c[0];
+                p.nombre = c[1];
+                p.lat = std::stod(c[2]);
+                p.lon = std::stod(c[3]);
+                p.lineas.push_back(indice);
+                p.bus = true;
+                g.estaciones.push_back(p);
+            }
+        }
+    }
 
     if (g.estaciones.empty()) return false;
 
@@ -169,6 +200,57 @@ bool cargarGrafo(const std::string& dirDatos, double transbordo, Graph& g) {
             }
         }
     }
+    // Rutas de bus: tramos entre paradas consecutivas y acceso a pie a las
+    // estaciones. El acceso se marca como transbordo porque cambia de línea.
+    if (conBuses) {
+        std::vector<std::vector<int>> nodosPorEstacion(g.estaciones.size());
+        for (std::size_t n = 0; n < g.nodos.size(); ++n) {
+            nodosPorEstacion[static_cast<std::size_t>(g.nodos[n].estacion)]
+                .push_back(static_cast<int>(n));
+        }
+
+        std::ifstream tramosBus(dirDatos + "/bus_tramos.csv");
+        if (tramosBus) {
+            std::string filaBus;
+            std::getline(tramosBus, filaBus);  // encabezado
+            while (std::getline(tramosBus, filaBus)) {
+                if (recortar(filaBus).empty()) continue;
+                const std::vector<std::string> c = dividir(filaBus, ',');
+                if (c.size() < 4) continue;
+                const int a = g.indiceEstacion(c[0]);
+                const int b = g.indiceEstacion(c[1]);
+                const int lin = g.indiceLinea(c[3]);
+                if (a < 0 || b < 0 || lin < 0) continue;
+                const int u = g.nodo(a, lin);
+                const int v = g.nodo(b, lin);
+                if (u < 0 || v < 0) continue;
+                g.adj[u].push_back({v, std::stod(c[2]), false});
+            }
+        }
+
+        // El CSV ya trae los dos sentidos del acceso; el de subida al bus
+        // incluye la espera, así que la arista se añade tal cual viene.
+        std::ifstream accesos(dirDatos + "/bus_acceso.csv");
+        if (accesos) {
+            std::string filaAcceso;
+            std::getline(accesos, filaAcceso);  // encabezado
+            while (std::getline(accesos, filaAcceso)) {
+                if (recortar(filaAcceso).empty()) continue;
+                const std::vector<std::string> c = dividir(filaAcceso, ',');
+                if (c.size() < 3) continue;
+                const int a = g.indiceEstacion(c[0]);
+                const int b = g.indiceEstacion(c[1]);
+                if (a < 0 || b < 0) continue;
+                const double minutos = std::stod(c[2]);
+                for (int desde : nodosPorEstacion[static_cast<std::size_t>(a)]) {
+                    for (int hasta : nodosPorEstacion[static_cast<std::size_t>(b)]) {
+                        g.adj[desde].push_back({hasta, minutos, true});
+                    }
+                }
+            }
+        }
+    }
+
     // Se deja calculada la velocidad máxima, que A* usa en cada búsqueda.
     g.velocidadMaxima();
     return true;

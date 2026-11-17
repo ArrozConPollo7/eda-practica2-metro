@@ -50,10 +50,14 @@ double haversineKm(double lat1, double lon1, double lat2, double lon2) {
 }
 
 int Graph::indiceEstacion(const std::string& idONombre) const {
+    if (idONombre.empty()) return -1;
     for (std::size_t i = 0; i < estaciones.size(); ++i) {
         if (estaciones[i].id == idONombre) return static_cast<int>(i);
     }
     const std::string buscado = normalizarTexto(idONombre);
+    // Sin texto que buscar no se compara: había paradas con el nombre vacío y
+    // una búsqueda vacía devolvía la primera de ellas.
+    if (buscado.empty()) return -1;
     for (std::size_t i = 0; i < estaciones.size(); ++i) {
         if (normalizarTexto(estaciones[i].nombre) == buscado) return static_cast<int>(i);
     }

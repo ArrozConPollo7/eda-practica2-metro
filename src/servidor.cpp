@@ -58,6 +58,7 @@ struct Estado {
     Graph grafo;
     Trie trie;
     double transbordo = 3.0;
+    bool conBuses = true;
     std::string jsonGrafo;  // se arma una vez: las estaciones no cambian
 };
 
@@ -69,11 +70,13 @@ std::string formato(double valor, int decimales = 1) {
 
 std::string escapar(const std::string& texto) {
     std::string salida;
-    for (char c : texto) {
+    for (unsigned char c : texto) {
         if (c == '"') salida += "\\\"";
         else if (c == '\\') salida += "\\\\";
         else if (c == '\n') salida += "\\n";
-        else salida.push_back(c);
+        else if (c == '\t') salida += "\\t";
+        // Los controles no son válidos dentro de una cadena JSON.
+        else if (c >= 0x20) salida.push_back(static_cast<char>(c));
     }
     return salida;
 }
@@ -150,19 +153,38 @@ std::string jsonGrafoCompleto(const Graph& g) {
         os << "{\"codigo\":\"" << g.lineas[i].codigo << "\",\"color\":\"" << g.lineas[i].color
            << "\"}";
     }
+    // Las estaciones del Metro y las paradas de bus van en listas separadas: el
+    // mapa dibuja las primeras siempre y las paradas solo si se piden.
     os << "],\"estaciones\":[";
+    bool primeroEstacion = true;
     for (std::size_t i = 0; i < g.estaciones.size(); ++i) {
-        if (i > 0) os << ",";
+        if (g.estaciones[i].bus) continue;
+        if (!primeroEstacion) os << ",";
+        primeroEstacion = false;
         os << jsonEstacion(g, static_cast<int>(i));
+    }
+    os << "],\"paradas\":[";
+    bool primeraParada = true;
+    for (std::size_t i = 0; i < g.estaciones.size(); ++i) {
+        const Estacion& e = g.estaciones[i];
+        if (!e.bus) continue;
+        if (!primeraParada) os << ",";
+        primeraParada = false;
+        os << "{\"id\":\"" << e.id << "\",\"nombre\":\"" << escapar(e.nombre)
+           << "\",\"lat\":" << formato(e.lat, 6) << ",\"lon\":" << formato(e.lon, 6)
+           << ",\"ruta\":\"" << g.lineas[static_cast<std::size_t>(e.lineas.front())].codigo
+           << "\"}";
     }
     os << "],\"aristas\":[";
     std::vector<std::pair<int, int>> vistas;
     bool primero = true;
     for (std::size_t u = 0; u < g.nodos.size(); ++u) {
+        if (g.estaciones[static_cast<std::size_t>(g.nodos[u].estacion)].bus) continue;
         for (const Arista& a : g.adj[u]) {
             if (a.transbordo) continue;
             const int estA = g.nodos[u].estacion;
             const int estB = g.nodos[a.destino].estacion;
+            if (g.estaciones[static_cast<std::size_t>(estB)].bus) continue;
             const std::pair<int, int> clave{std::min(estA, estB), std::max(estA, estB)};
             if (std::find(vistas.begin(), vistas.end(), clave) != vistas.end()) continue;
             vistas.push_back(clave);
@@ -243,7 +265,7 @@ void responder(socket_t cliente, const std::string& estado, const std::string& t
 void asegurarTransbordo(Estado& e, double pedido) {
     if (std::fabs(pedido - e.transbordo) < 1e-9) return;
     Graph nuevo;
-    if (cargarGrafo(e.carpeta, pedido, nuevo)) {
+    if (cargarGrafo(e.carpeta, pedido, nuevo, e.conBuses)) {
         e.grafo = std::move(nuevo);
         e.transbordo = pedido;
     }
@@ -341,11 +363,12 @@ std::string manejarApi(Estado& e, const std::string& ruta,
 
 }  // namespace
 
-int iniciarServidor(const std::string& carpetaDatos, double transbordo, int puerto) {
+int iniciarServidor(const std::string& carpetaDatos, double transbordo, int puerto, bool conBuses) {
     Estado estado;
     estado.carpeta = carpetaDatos;
     estado.transbordo = transbordo;
-    if (!cargarGrafo(carpetaDatos, transbordo, estado.grafo)) {
+    estado.conBuses = conBuses;
+    if (!cargarGrafo(carpetaDatos, transbordo, estado.grafo, conBuses)) {
         std::cerr << "No se pudieron cargar los datos de " << carpetaDatos << "\n";
         return 1;
     }

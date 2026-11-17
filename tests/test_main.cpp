@@ -33,7 +33,7 @@ bool cerca(double a, double b) { return std::fabs(a - b) < 1e-6; }
 
 int main() {
     Graph g;
-    assert(cargarGrafo(CARPETA_DATOS, 3.0, g));
+    assert(cargarGrafo(CARPETA_DATOS, 3.0, g, false));
 
     // 1. Estructura cargada: 46 estaciones, 8 líneas y 53 nodos (estación, línea).
     assert(g.estaciones.size() == 46);
@@ -130,7 +130,7 @@ int main() {
 
     // 8. El transbordo cuesta exactamente lo configurado.
     Graph sinCosto;
-    assert(cargarGrafo(CARPETA_DATOS, 0.0, sinCosto));
+    assert(cargarGrafo(CARPETA_DATOS, 0.0, sinCosto, false));
     assert(cerca(costoRuta(sinCosto, "san_javier", "santo_domingo"), 29.5));
     std::cout << "OK penalización de transbordo\n";
 
@@ -147,6 +147,37 @@ int main() {
     assert(arvi.size() == 1 && g.estaciones[arvi[0]].id == "arvi");
     assert(trie.porPrefijo("zzz", 10).empty());
     std::cout << "OK autocompletado con Trie\n";
+
+    // 10. Rutas alimentadoras: el grafo crece, aparecen alternativas y cerrar
+    // una estación de paso deja de ser un callejón sin salida.
+    Graph conBus;
+    assert(cargarGrafo(CARPETA_DATOS, 3.0, conBus, true));
+    int paradas = 0;
+    for (const Estacion& e : conBus.estaciones) {
+        if (e.bus) ++paradas;
+    }
+    assert(paradas == 1836);
+    assert(conBus.lineas.size() == 55);
+    assert(conBus.nodos.size() == 1889);
+    assert(conBus.totalAristas() == 3794);
+
+    const Resultado baseBus = dijkstra(conBus, conBus.nodosDeEstacion(estacion(conBus, "san_antonio")),
+                                       conBus.nodosDeEstacion(estacion(conBus, "arvi")));
+    assert(baseBus.encontrado);
+    const std::vector<Resultado> alternativas =
+        yen(conBus, baseBus.nodos.front(), baseBus.nodos.back(), 3);
+    assert(alternativas.size() == 3);
+    assert(alternativas[0].costo < 47.0);  // el bus mejora el tiempo del Metro solo
+
+    Bloqueo cierreBus(static_cast<int>(conBus.nodos.size()));
+    for (int n : conBus.nodosDeEstacion(estacion(conBus, "universidad"))) {
+        cierreBus.nodos[n] = 1;
+    }
+    const Resultado desvio = dijkstra(conBus, conBus.nodosDeEstacion(estacion(conBus, "san_antonio")),
+                                      conBus.nodosDeEstacion(estacion(conBus, "acevedo")), &cierreBus);
+    assert(desvio.encontrado);
+    std::cout << "OK rutas de bus (" << paradas << " paradas, " << alternativas.size()
+              << " alternativas, desvio por " << desvio.costo << " min)\n";
 
     std::cout << "Todas las pruebas pasaron\n";
     return 0;

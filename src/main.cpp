@@ -22,6 +22,7 @@ Trie trie;
 Resultado ultimaRuta;
 std::string carpetaDatos = "data";
 double transbordo = 3.0;  // minutos que cuesta cambiar de línea
+bool conBuses = true;     // --metro lo desactiva
 
 std::string minutos(double valor) {
     std::ostringstream os;
@@ -366,7 +367,7 @@ void opcionTransbordo() {
         return;
     }
     Graph nuevo;
-    if (!cargarGrafo(carpetaDatos, valor, nuevo)) {
+    if (!cargarGrafo(carpetaDatos, valor, nuevo, conBuses)) {
         std::cout << "No se pudo recargar el grafo; se mantiene la penalización anterior.\n";
         return;
     }
@@ -400,6 +401,16 @@ int main(int argc, char** argv) {
     std::string carpeta = "data";
     std::vector<std::string> argumentos;
     for (int i = 1; i < argc; ++i) argumentos.push_back(argv[i]);
+    // --metro deja el grafo solo con las líneas del Metro (sin buses): sirve
+    // para comparar los dos modelos sin cambiar los datos.
+    for (std::size_t i = 0; i < argumentos.size();) {
+        if (argumentos[i] == "--metro") {
+            conBuses = false;
+            argumentos.erase(argumentos.begin() + static_cast<long>(i));
+        } else {
+            ++i;
+        }
+    }
     if (!argumentos.empty() && argumentos.front() == "--web") {
         modoWeb = true;
         argumentos.erase(argumentos.begin());
@@ -412,20 +423,32 @@ int main(int argc, char** argv) {
     if (!argumentos.empty()) carpeta = argumentos.front();
 
     carpetaDatos = carpeta;
-    if (!cargarGrafo(carpeta, transbordo, grafo)) {
+    if (!cargarGrafo(carpeta, transbordo, grafo, conBuses)) {
         carpetaDatos = "../" + carpeta;
-        if (!cargarGrafo(carpetaDatos, transbordo, grafo)) {
+        if (!cargarGrafo(carpetaDatos, transbordo, grafo, conBuses)) {
             std::cerr << "No se encontraron stations.csv y edges.csv en '" << carpeta
-                      << "' (uso: navegador [--web [puerto]] [carpeta_datos])\n";
+                      << "' (uso: navegador [--web [puerto]] [--metro] [carpeta_datos])\n";
             return 1;
         }
     }
-    if (modoWeb) return iniciarServidor(carpetaDatos, transbordo, puerto);
+    if (modoWeb) return iniciarServidor(carpetaDatos, transbordo, puerto, conBuses);
     prepararTrie();
 
-    std::cout << "Metro de Medellín: " << grafo.estaciones.size() << " estaciones, "
-              << grafo.lineas.size() << " líneas, " << grafo.nodos.size() << " nodos (estación, línea), "
-              << grafo.totalAristas() << " aristas dirigidas\n";
+    int paradas = 0;
+    std::vector<char> lineaDeBus(grafo.lineas.size(), 0);
+    for (const Estacion& e : grafo.estaciones) {
+        if (!e.bus) continue;
+        ++paradas;
+        for (int l : e.lineas) lineaDeBus[static_cast<std::size_t>(l)] = 1;
+    }
+    int rutasBus = 0;
+    for (char c : lineaDeBus) {
+        if (c != 0) ++rutasBus;
+    }
+    std::cout << "Metro de Medellín: " << (grafo.estaciones.size() - paradas) << " estaciones, "
+              << (grafo.lineas.size() - rutasBus) << " líneas del Metro, " << paradas
+              << " paradas de bus en " << rutasBus << " rutas, " << grafo.nodos.size()
+              << " nodos (estación, línea), " << grafo.totalAristas() << " aristas dirigidas\n";
 
     while (true) {
         mostrarMenu();
